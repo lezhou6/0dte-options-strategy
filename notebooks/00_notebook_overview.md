@@ -13,4 +13,8 @@ Time matters to 0dte research, so I checked the timestamp handling in the data. 
 
 For 0DTE SPY options, the closing price used for settlement is the SPY official last price at 4:00PM ET. Data is already in ET, so no additional timezone / daylight saving handling is needed.  
 
-Visualize ATM Call / Put ask price vs time to maturity for sanity check.  
+Some sanity check visualization:  
+
+- ATM Call / Put ask price vs time to maturity
+- underlying price by day
+- IV smile at noon
