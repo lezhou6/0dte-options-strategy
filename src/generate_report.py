@@ -1,0 +1,327 @@
+"""Generate SPY 0DTE HTML analysis report with interactive Plotly charts."""
+
+import glob
+import os
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
+OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "visualization", "spy_report.html")
+
+COLORS = [
+    "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+    "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+]
+
+
+def load_data() -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(RAW_DIR, "*.parquet")))
+    if not files:
+        raise FileNotFoundError(f"No parquet files in {RAW_DIR}")
+    raw = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    df = raw[
+        (raw["implied_vol"] > 0)
+        & (raw["iv_error"] < 1.0)
+        & (raw["delta"].abs().between(0.01, 0.99))
+        & (raw["bid"] > 0)
+    ].copy()
+    df["mid"] = (df["bid"] + df["ask"]) / 2
+    return df
+
+
+def build_atm_fig(df: pd.DataFrame) -> go.Figure:
+    """ATM mid price vs minutes to expiration, slider selects number of days shown."""
+    df = df.copy()
+    df["strike_dist"] = (df["strike"] - df["underlying_price"]).abs()
+    atm = df.loc[df.groupby(["expiration", "timestamp", "right"])["strike_dist"].idxmin()].copy()
+    close_dt = atm["timestamp"].apply(
+        lambda t: t.replace(hour=16, minute=0, second=0, microsecond=0)
+    )
+    atm["ttm_min"] = (close_dt - atm["timestamp"]).dt.total_seconds() / 60
+
+    exps = sorted(atm["expiration"].unique())
+    N = len(exps)
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=["ATM Call (mid)", "ATM Put (mid)"],
+        horizontal_spacing=0.12,
+    )
+
+    trace_meta = []
+    for i, exp in enumerate(exps):
+        color = COLORS[i % len(COLORS)]
+        for right in ["CALL", "PUT"]:
+            sub = (
+                atm[(atm["expiration"] == exp) & (atm["right"] == right)]
+                .sort_values("ttm_min", ascending=False)
+            )
+            col = 1 if right == "CALL" else 2
+            fig.add_trace(
+                go.Scatter(
+                    x=sub["ttm_min"].tolist(),
+                    y=sub["mid"].round(2).tolist(),
+                    name=str(exp),
+                    mode="lines+markers",
+                    marker=dict(size=5),
+                    line=dict(color=color),
+                    legendgroup=str(exp),
+                    showlegend=(right == "CALL"),
+                    visible=True,
+                ),
+                row=1, col=col,
+            )
+            trace_meta.append((exp, right))
+
+    steps = []
+    for k in range(1, N + 1):
+        sel = set(np.round(np.linspace(0, N - 1, k)).astype(int).tolist())
+        sel_exps = {exps[i] for i in sel}
+        visible = [exp in sel_exps for (exp, _) in trace_meta]
+        steps.append(dict(method="restyle", args=[{"visible": visible}], label=str(k)))
+
+    fig.update_xaxes(autorange="reversed", title_text="Minutes to expiration")
+    fig.update_yaxes(title_text="Mid price ($)")
+    fig.update_layout(
+        template="plotly_dark",
+        title="ATM Option Mid Price vs Time to Expiration",
+        legend=dict(title="Expiration"),
+        sliders=[dict(
+            active=N - 1,
+            steps=steps,
+            currentvalue={"prefix": "Days shown: "},
+            pad={"t": 50},
+        )],
+        height=520,
+        margin=dict(b=80),
+    )
+    return fig
+
+
+def build_price_fig(df: pd.DataFrame) -> go.Figure:
+    """Intraday underlying price, one trace per day so days are not connected."""
+    price_df = (
+        df[["expiration", "timestamp", "underlying_price"]]
+        .drop_duplicates(subset=["expiration", "timestamp"])
+        .sort_values(["expiration", "timestamp"])
+    )
+
+    exps = sorted(price_df["expiration"].unique())
+    fig = go.Figure()
+    for i, exp in enumerate(exps):
+        day = price_df[price_df["expiration"] == exp]
+        fig.add_trace(go.Scatter(
+            x=day["timestamp"].tolist(),
+            y=day["underlying_price"].tolist(),
+            mode="lines",
+            line=dict(color=COLORS[i % len(COLORS)], width=1.5),
+            name=str(exp),
+        ))
+
+    fig.update_layout(
+        template="plotly_dark",
+        title="SPY Underlying Price (15m intervals)",
+        xaxis=dict(
+            title="Date",
+            rangebreaks=[
+                dict(bounds=["sat", "mon"]),
+                dict(bounds=[16, 9.5], pattern="hour"),
+            ],
+        ),
+        yaxis=dict(title="Price ($)"),
+        legend=dict(title="Expiration"),
+        height=420,
+    )
+    return fig
+
+
+def _smile_xy(
+    df: pd.DataFrame, time_str: str, exp, right: str, window_pct: float = 0.08
+) -> tuple[list, list]:
+    """Return (moneyness%, implied_vol) for one (time, expiration, right) slice."""
+    h, m = int(time_str[:2]), int(time_str[3:])
+    sub = df[
+        (df["timestamp"].dt.hour == h)
+        & (df["timestamp"].dt.minute == m)
+        & (df["expiration"] == exp)
+        & (df["right"] == right)
+    ]
+    if sub.empty:
+        return [], []
+    underlying = sub["underlying_price"].iloc[0]
+    sub = sub[
+        sub["strike"].between(underlying * (1 - window_pct), underlying * (1 + window_pct))
+    ].sort_values("strike")
+    moneyness = ((sub["strike"] - underlying) / underlying * 100).round(2).tolist()
+    iv = sub["implied_vol"].round(4).tolist()
+    return moneyness, iv
+
+
+def build_smile_fig(df: pd.DataFrame, default_time: str = "12:00") -> go.Figure:
+    """IV smile (IV vs moneyness) with time dropdown and num-days slider.
+
+    x=0 is always ATM, centering the smile regardless of underlying level.
+    Time dropdown and num-days slider are independent controls.
+    """
+    exps = sorted(df["expiration"].unique())
+    N = len(exps)
+    times = sorted(df["timestamp"].dt.strftime("%H:%M").unique())
+    if default_time not in times:
+        default_time = times[len(times) // 2]
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=["IV Smile — Calls", "IV Smile — Puts"],
+        horizontal_spacing=0.12,
+    )
+
+    trace_meta = []
+    for i, exp in enumerate(exps):
+        color = COLORS[i % len(COLORS)]
+        for right in ["CALL", "PUT"]:
+            x, y = _smile_xy(df, default_time, exp, right)
+            col = 1 if right == "CALL" else 2
+            fig.add_trace(
+                go.Scatter(
+                    x=x, y=y,
+                    name=str(exp),
+                    mode="lines+markers",
+                    marker=dict(size=5),
+                    line=dict(color=color),
+                    legendgroup=str(exp),
+                    showlegend=(right == "CALL"),
+                    visible=True,
+                ),
+                row=1, col=col,
+            )
+            trace_meta.append((exp, right))
+
+    # Time dropdown — updates x/y data for all traces, does not touch visibility
+    time_buttons = []
+    for t in times:
+        new_x, new_y = [], []
+        for exp, right in trace_meta:
+            x, y = _smile_xy(df, t, exp, right)
+            new_x.append(x)
+            new_y.append(y)
+        time_buttons.append(dict(label=t, method="restyle", args=[{"x": new_x, "y": new_y}]))
+
+    # Num-days slider — updates visibility only, does not touch data
+    steps = []
+    for k in range(1, N + 1):
+        sel = set(np.round(np.linspace(0, N - 1, k)).astype(int).tolist())
+        sel_exps = {exps[i] for i in sel}
+        visible = [exp in sel_exps for (exp, _) in trace_meta]
+        steps.append(dict(method="restyle", args=[{"visible": visible}], label=str(k)))
+
+    fig.update_xaxes(
+        title_text="Moneyness (%)",
+        zeroline=True,
+        zerolinecolor="#555",
+        zerolinewidth=1,
+    )
+    fig.update_yaxes(title_text="Implied Volatility")
+    fig.update_layout(
+        template="plotly_dark",
+        title="IV Smile",
+        legend=dict(title="Expiration"),
+        updatemenus=[dict(
+            buttons=time_buttons,
+            direction="down",
+            showactive=True,
+            x=0.5,
+            xanchor="center",
+            y=1.2,
+            yanchor="top",
+            active=times.index(default_time),
+            bgcolor="#2a2e39",
+            bordercolor="#555",
+            font=dict(color="#d1d4dc"),
+        )],
+        sliders=[dict(
+            active=N - 1,
+            steps=steps,
+            currentvalue={"prefix": "Days shown: "},
+            pad={"t": 50},
+        )],
+        height=560,
+        margin=dict(b=80, t=120),
+        annotations=[dict(
+            text="Time:",
+            x=0.38, xanchor="right",
+            y=1.17, yanchor="top",
+            xref="paper", yref="paper",
+            showarrow=False,
+            font=dict(color="#9598a1"),
+        )],
+    )
+    return fig
+
+
+def main() -> None:
+    print("Loading data...")
+    df = load_data()
+    exps = sorted(df["expiration"].unique())
+    print(f"  {len(exps)} expirations: {exps[0]} → {exps[-1]}")
+
+    print("Building figures...")
+    fig_atm = build_atm_fig(df)
+    fig_price = build_price_fig(df)
+    fig_smile = build_smile_fig(df)
+
+    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    html_atm = fig_atm.to_html(full_html=False, include_plotlyjs=False)
+    html_price = fig_price.to_html(full_html=False, include_plotlyjs=False)
+    html_smile = fig_smile.to_html(full_html=False, include_plotlyjs=False)
+
+    report = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SPY 0DTE Analysis</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  body {{
+    background: #131722;
+    color: #d1d4dc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 24px 32px;
+  }}
+  h1 {{
+    color: #d1d4dc;
+    border-bottom: 1px solid #2a2e39;
+    padding-bottom: 12px;
+    margin-bottom: 36px;
+    font-size: 1.4rem;
+    letter-spacing: 0.02em;
+  }}
+  h2 {{
+    color: #9598a1;
+    margin-top: 52px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }}
+  .section {{ margin-bottom: 52px; }}
+</style>
+</head>
+<body>
+<h1>SPY 0DTE Analysis</h1>
+<div class="section"><h2>ATM Option Price Decay</h2>{html_atm}</div>
+<div class="section"><h2>Underlying Price</h2>{html_price}</div>
+<div class="section"><h2>IV Smile</h2>{html_smile}</div>
+</body>
+</html>"""
+
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"Report saved to {OUT_PATH}")
+
+
+if __name__ == "__main__":
+    main()

@@ -9,7 +9,9 @@ To fetch SPY greeks raw data and store in `data/raw/greeks/SPY` as parquet files
 `python src/fetch_greeks.py`  
 By default, the raw data from 2026-05-06 to 2026-05-19 are fetched. Customize a range by setting `end` and `periods`:  
 `python src/fetch_greeks.py --end 2026-05-22 --periods 5`  
-
+To generate a summary report based on raw data, run:  
+`python src/generate_report.py`  
+Generated report is saved as `/data/visualization/spy_report.html`.  
 
 # Early exploration with raw data
 `notebooks/` contains some early exploration with raw data including:
@@ -33,7 +35,7 @@ Then later, more mathematical distributions can be chosen based on the result of
 # Potential application layer (low priority)
 With a distribution of closing price given by the model, an additional application layer may be designed in this project to help decision making. Some examples: 
 - User thinking about buying a call: probability of the underlying closing price stays above some price. 
-- User thinking about selling a strangle: pribability of underlying closing price stays in some range. 
+- User thinking about selling a strangle: probability of underlying closing price stays in some range. 
 - User wants 40% win rate with 3:1 payoff: some strike price suggestion.  
 
 The general idea is to give some suggestions based on user's customized risk/reward filter. 
