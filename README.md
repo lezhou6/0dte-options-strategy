@@ -3,9 +3,13 @@ Study 0DTE options to help trading decision.
 Potential formulation: train a model to predict a distribution of closing (end-of-day) price.
 
 # Raw data
-This project uses Theta Data Options data. A standard option data plan is required to run this project.  
-Python library `thetadata` is used to fetch raw data from Theta Data. Add a `creds.txt` with Theta Data username and id under same directory of source code to use thetadata library.  
-Raw data is fetched and then stored in `data/raw` as parquet files to preserve data type.  
+This project uses Theta Data https://www.thetadata.net/ Options data. A standard option data plan is required to run this project.  
+Python library `thetadata` is used to fetch raw data from Theta Data. Add a `creds.txt` with Theta Data username and id under current directory to use thetadata library.  
+To fetch SPY greeks raw data and store in `data/raw/greeks/SPY` as parquet files, run:  
+`python src/fetch_greeks.py`  
+By default, the raw data from 2026-05-06 to 2026-05-19 are fetched. Customize a range by setting `end` and `periods`:  
+`python src/fetch_greeks.py --end 2026-05-22 --periods 5`  
+
 
 # Early exploration with raw data
 `notebooks/` contains some early exploration with raw data including:
