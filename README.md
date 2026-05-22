@@ -5,7 +5,7 @@ Potential formulation: train a model to predict a distribution of closing (end-o
 # Raw data
 This project uses Theta Data https://www.thetadata.net/ Options data. A standard option data plan is required to run this project.  
 Python library `thetadata` is used to fetch raw data from Theta Data. Add a `creds.txt` with Theta Data username and id under current directory to use thetadata library.  
-To fetch SPY greeks raw data and store in `data/raw/greeks/SPY` as parquet files, run:  
+To fetch SPY greeks raw data and store in `data/raw/greeks/SPY` as parquet files (to preserve data type), run:  
 `python src/fetch_greeks.py`  
 By default, the raw data from 2026-05-06 to 2026-05-19 are fetched. Customize a range by setting `end` and `periods`:  
 `python src/fetch_greeks.py --end 2026-05-22 --periods 5`  
@@ -21,8 +21,9 @@ By default, the raw data from 2026-05-06 to 2026-05-19 are fetched. Customize a 
 See `notebooks/00_notebook_overview.md` for a more detailed overview.
 
 # Data construction and feature engineering
-
-
+Extract closing price from raw greeks `underlying_price` column at the closing time 16:00 and store in `data/processed/spy_closing_prices.csv`:  
+`python src/extract_closing_prices.py`  
+Choose csv for better readability.  
 
 
 # Output formulation
