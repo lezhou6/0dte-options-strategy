@@ -26,7 +26,7 @@ See `notebooks/00_notebook_overview.md` for a more detailed overview.
 Extract closing price from raw greeks `underlying_price` column at the closing time 16:00 and store in `data/processed/spy_closing_prices.csv`:  
 `python src/extract_closing_prices.py`  
 Choose csv for better readability.  
-
+Log-return log(closing price / price at snapshot) is used as label because log-return is conventional in quant ML.  
 
 # Output formulation
 May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  
