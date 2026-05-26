@@ -25,8 +25,8 @@ Generated report is saved as `/data/visualization/spy_report.html`.
 See `notebooks/00_notebook_overview.md` for a more detailed overview.
 
 # Data construction and feature engineering
-Extract closing price from raw greeks `underlying_price` column at the closing time 16:00 and store in `data/processed/spy_closing_prices.csv`:  
-`python src/extract_closing_prices.py`  
+Extract closing and opening prices from raw greeks `underlying_price` column at the closing time 16:00 and the opening time 9:30, and store in `data/processed/spy_closing_prices.csv` and `data/processed/spy_opening_prices.csv`:  
+`python src/extract_prices.py`  
 Choose csv for better readability.  
 Log-return log(closing price / price at snapshot) is used as label because log-return is conventional in quant ML.  
 
