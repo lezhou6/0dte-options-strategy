@@ -30,6 +30,16 @@ Extract closing and opening prices from raw greeks `underlying_price` column at 
 Choose csv for better readability.  
 Log-return log(closing price / price at snapshot) is used as label because log-return is conventional in quant ML.  
 
+Run `python src/process_raw_data.py` to process raw data through the following steps:  
+- Load raw greeks from `data/raw/greeks`.  
+- Apply basic filter (implied_vol > 0, iv_error < 1.0, delta.abs().between(0.01, 0.99), bid > 0) to filter out meaningless data.  
+- Filter out opening (9:30) and closing (16:00) data.  
+- Read `data/processed/spy_closing_prices.csv` and `data/processed/spy_opening_prices.csv`, merge as `spy_close` and `spy_open`, assert uniqueness per expiration.  
+- Add `log_return_from_open` = ln(underlying_price / spy_open). 
+- Add `ttm_min` time to maturity (expiry) in minutes counting to 16:00.  
+- Add `log_return` = ln(spy_close / underlying_price), this is the label.  
+- Save to `data/processed/spy_processed.parquet`.   
+
 # Output formulation
 May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  
 Then later, more mathematical distributions can be chosen based on the result of quantile regression. Some candidates: Student-t, Mixture of Gaussians, Skew-normal... May use maximum log-likelihood in training.  
