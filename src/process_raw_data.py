@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
+OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi", "SPY")
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
 OUT_PATH = os.path.join(PROCESSED_DIR, "spy_processed.parquet")
 
@@ -48,6 +49,19 @@ def merge_daily_price(df: pd.DataFrame, csv_path: str, price_col: str) -> pd.Dat
     return df
 
 
+def merge_oi(df: pd.DataFrame) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(OI_DIR, "*.parquet")))
+    if not files:
+        raise FileNotFoundError(f"No OI parquet files found in {OI_DIR}")
+    oi = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    oi = oi.drop(columns=["symbol", "timestamp"])
+    oi = oi.drop_duplicates(subset=["expiration", "strike", "right"], keep="first")
+    oi["expiration"] = pd.to_datetime(oi["expiration"])
+    df = df.merge(oi, on=["expiration", "strike", "right"], how="left")
+    df["open_interest"] = df["open_interest"].fillna(0).astype(int)
+    return df
+
+
 def main() -> None:
     print("Loading raw data...")
     raw = load_raw()
@@ -75,6 +89,9 @@ def main() -> None:
     df["ttm_min"] = (close_dt - df["timestamp"]).dt.total_seconds() / 60
 
     df["log_return"] = np.log(df["spy_close"] / df["underlying_price"])
+
+    df = merge_oi(df)
+    print(f"  open_interest merged ({df['open_interest'].gt(0).sum()} non-zero rows)")
 
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     df.to_parquet(OUT_PATH, index=False)
