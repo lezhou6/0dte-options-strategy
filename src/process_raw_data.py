@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 
 RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
 OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi", "SPY")
@@ -62,6 +63,29 @@ def merge_oi(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+_MIN_TO_YEAR = 1.0 / (365 * 1440)
+_RISK_FREE_RATE = 0.04
+
+
+def add_gamma(df: pd.DataFrame) -> pd.DataFrame:
+    t = df["ttm_min"] * _MIN_TO_YEAR
+    sigma = df["implied_vol"]
+    valid = (t > 0) & (sigma > 0)
+    d1 = pd.Series(np.nan, index=df.index)
+    gamma = pd.Series(np.nan, index=df.index)
+    d1[valid] = (
+        np.log(df.loc[valid, "underlying_price"] / df.loc[valid, "strike"])
+        + (_RISK_FREE_RATE + 0.5 * sigma[valid] ** 2) * t[valid]
+    ) / (sigma[valid] * np.sqrt(t[valid]))
+    gamma[valid] = norm.pdf(d1[valid]) / (
+        df.loc[valid, "underlying_price"] * sigma[valid] * np.sqrt(t[valid])
+    )
+    df = df.copy()
+    df["d1"] = d1
+    df["gamma"] = gamma
+    return df
+
+
 def main() -> None:
     print("Loading raw data...")
     raw = load_raw()
@@ -89,6 +113,9 @@ def main() -> None:
     df["ttm_min"] = (close_dt - df["timestamp"]).dt.total_seconds() / 60
 
     df["log_return"] = np.log(df["spy_close"] / df["underlying_price"])
+
+    df = add_gamma(df)
+    print(f"  d1 and gamma calculated")
 
     df = merge_oi(df)
     print(f"  open_interest merged ({df['open_interest'].gt(0).sum()} non-zero rows)")
