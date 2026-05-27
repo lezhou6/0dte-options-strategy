@@ -46,3 +46,5 @@ The result shows that gamma calculated from the two methods generally agree, and
 Then, I used sample response in https://docs.thetadata.us/operations_python/option_history_trade_greeks_all.html as gamma calculation correctness check. I calculated the gamma using my Black-Scholes method with underlying price, strike price, time to maturity, implied volatility, and I compare the calculated gamma with the gamma shown in the website. I observed that when I use risk-free interest rate = 0.04 and use full calendar minutes per year instead of only using trading hours (this actually doesn't matter for my 0DTE project cause I don't need to care about night time from 16:00 to 9:30 next day in 0DTE options), my calculated gamma agrees with the sample response. The result is acceptable to me.  
 
 Then similarly, d1 and gamma calculation is integrated in `src/process_raw_data.py`, and compared with the notebook.  
+
+A simple visualization on 2026-5-6 data is created at the end of this notebook.  
