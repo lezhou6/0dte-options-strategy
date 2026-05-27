@@ -42,3 +42,5 @@ The Theta Data standard plan only gives first order greeks, so I tried two ways 
 - Black-Scholes method calculated from underlying price, strike, implied volatility, time to maturity, and rist-free rate (negligible effect for 0DTE).  
 
 The result shows that gamma calculated from the two methods generally agree, and gamma calculated from delta is 3 times more noisy than calculated from Black-Scholes.  
+
+Then, I used sample response in https://docs.thetadata.us/operations_python/option_history_trade_greeks_all.html as gamma calculation correctness check. I calculated the gamma using my Black-Scholes method with underlying price, strike price, time to maturity, implied volatility, and I use 0.04 for risk free interest rate. I compare the calculated gamma with the gamma shown in the website, and the result is acceptable to me.  
