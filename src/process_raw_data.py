@@ -11,7 +11,7 @@ RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks",
 OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi", "SPY")
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
 OUT_PATH = os.path.join(PROCESSED_DIR, "spy_processed.parquet")
-EXPOSURE_PATH = os.path.join(PROCESSED_DIR, "spy_exposure.parquet")
+AGGREGATE_PATH = os.path.join(PROCESSED_DIR, "spy_aggregate.parquet")
 
 
 def load_raw() -> pd.DataFrame:
@@ -83,9 +83,12 @@ def add_exposure(df: pd.DataFrame) -> pd.DataFrame:
 
 def calc_net_exposure(df: pd.DataFrame) -> pd.DataFrame:
     net = (
-        df.groupby("timestamp")[["dex", "gex"]]
-        .sum()
-        .rename(columns={"dex": "net_dex", "gex": "net_gex"})
+        df.groupby("timestamp")
+        .agg(
+            net_dex=("dex", "sum"),
+            net_gex=("gex", "sum"),
+            underlying_price=("underlying_price", "first"),
+        )
         .reset_index()
     )
     return net
@@ -153,8 +156,8 @@ def main() -> None:
     print(f"Columns: {list(df.columns)}")
 
     exposure = calc_net_exposure(df)
-    exposure.to_parquet(EXPOSURE_PATH, index=False)
-    print(f"Saved {len(exposure)} rows to {EXPOSURE_PATH}")
+    exposure.to_parquet(AGGREGATE_PATH, index=False)
+    print(f"Saved {len(exposure)} rows to {AGGREGATE_PATH}")
 
 
 if __name__ == "__main__":
