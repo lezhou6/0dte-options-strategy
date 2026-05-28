@@ -48,3 +48,7 @@ Then, I used sample response in https://docs.thetadata.us/operations_python/opti
 Then similarly, d1 and gamma calculation is integrated in `src/process_raw_data.py`, and compared with the notebook.  
 
 A simple visualization on 2026-5-6 data is created at the end of this notebook.  
+
+# 05_exposure
+
+Calculate dealer delta exposure DEX and net DEX under the assumption that dealer is short what customer is long, then the net DEX is visualized.  
