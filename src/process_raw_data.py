@@ -11,6 +11,7 @@ RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks",
 OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi", "SPY")
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
 OUT_PATH = os.path.join(PROCESSED_DIR, "spy_processed.parquet")
+EXPOSURE_PATH = os.path.join(PROCESSED_DIR, "spy_exposure.parquet")
 
 
 def load_raw() -> pd.DataFrame:
@@ -67,6 +68,29 @@ _MIN_TO_YEAR = 1.0 / (365 * 1440)
 _RISK_FREE_RATE = 0.04
 
 
+def add_exposure(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["dex"] = -df["delta"] * df["open_interest"] * df["underlying_price"] * 100
+    df["gex"] = (
+        df["gamma"].where(df["right"] == "CALL", -df["gamma"])
+        * df["open_interest"]
+        * df["underlying_price"] ** 2
+        * 100
+        * 0.01
+    )
+    return df
+
+
+def calc_net_exposure(df: pd.DataFrame) -> pd.DataFrame:
+    net = (
+        df.groupby("timestamp")[["dex", "gex"]]
+        .sum()
+        .rename(columns={"dex": "net_dex", "gex": "net_gex"})
+        .reset_index()
+    )
+    return net
+
+
 def add_gamma(df: pd.DataFrame) -> pd.DataFrame:
     t = df["ttm_min"] * _MIN_TO_YEAR
     sigma = df["implied_vol"]
@@ -120,10 +144,17 @@ def main() -> None:
     df = merge_oi(df)
     print(f"  open_interest merged ({df['open_interest'].gt(0).sum()} non-zero rows)")
 
+    df = add_exposure(df)
+    print(f"  dex and gex calculated")
+
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     df.to_parquet(OUT_PATH, index=False)
     print(f"Saved {len(df)} rows to {OUT_PATH}")
     print(f"Columns: {list(df.columns)}")
+
+    exposure = calc_net_exposure(df)
+    exposure.to_parquet(EXPOSURE_PATH, index=False)
+    print(f"Saved {len(exposure)} rows to {EXPOSURE_PATH}")
 
 
 if __name__ == "__main__":

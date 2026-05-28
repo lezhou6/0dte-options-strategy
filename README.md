@@ -38,7 +38,12 @@ Run `python src/process_raw_data.py` to process raw data through the following s
 - Add `log_return_from_open` = ln(underlying_price / spy_open). 
 - Add `ttm_min` time to maturity (expiry) in minutes counting to 16:00.  
 - Add `log_return` = ln(spy_close / underlying_price), this is the label.  
+- Add `d1` and `gamma` calculated through Black-Scholes.  
+- Read `data/raw/oi` and add `open_interest`.  
+- Calculate and add `dex` and `gex`.  
 - Save to `data/processed/spy_processed.parquet`.   
+- Net DEX and GEX are calculated and saved to `data/processed/spy_exposure.parquet`.  
+
 
 # Output formulation
 May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  

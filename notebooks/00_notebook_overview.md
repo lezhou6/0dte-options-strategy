@@ -52,3 +52,8 @@ A simple visualization on 2026-5-6 data is created at the end of this notebook.
 # 05_exposure
 
 Calculate dealer delta exposure DEX and net DEX under the assumption that dealer is short what customer is long, then the net DEX is visualized.  
+2026-5-15 net dex data looks weirdly large in magnitude and noisy? Reason can be it's Friday and also monthly expiration date (SPY Monthly Expirations: Standard monthly options expire on the third Friday of every month), but I'm not sure. Logged in `questions`/.  
+
+Similarly, calculate dealer gamma exposure GEX and net GEX, and visualize. Additional 0.01 multiplier is applied in GEX calculation due to the convention to use dollars per 1% move convention for gex calculation. The visualization of net GEX on 2026-5-15 doesn't look so weird.  
+
+Same as previous notebooks, the exposures are integrated in `src/process_raw_data.py` and compared with the result in notebook.  
