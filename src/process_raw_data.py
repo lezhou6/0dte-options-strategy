@@ -37,6 +37,33 @@ def filter_open_close(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _extract_prices(hour: int, minute: int, col_name: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(RAW_DIR, "*.parquet")))
+    if not files:
+        raise FileNotFoundError(f"No parquet files found in {RAW_DIR}")
+    records = []
+    for path in files:
+        date_str = os.path.splitext(os.path.basename(path))[0]
+        tmp = pd.read_parquet(path, columns=["timestamp", "underlying_price"])
+        rows = tmp[(tmp["timestamp"].dt.hour == hour) & (tmp["timestamp"].dt.minute == minute)]
+        if rows.empty:
+            print(f"Warning: no {hour:02d}:{minute:02d} rows for {date_str}, skipping")
+            continue
+        records.append({"date": date_str, col_name: round(rows["underlying_price"].iloc[0], 2)})
+    return pd.DataFrame(records)
+
+
+def extract_prices() -> None:
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
+    for (hour, minute), filename, col in [
+        ((9, 30), "spy_opening_prices.csv", "opening_price"),
+        ((16, 0), "spy_closing_prices.csv", "closing_price"),
+    ]:
+        result = _extract_prices(hour, minute, col)
+        result.to_csv(os.path.join(PROCESSED_DIR, filename), index=False)
+        print(f"  Saved {len(result)} rows to {filename}")
+
+
 def merge_daily_price(df: pd.DataFrame, csv_path: str, price_col: str) -> pd.DataFrame:
     prices = pd.read_csv(csv_path)
     prices["date"] = pd.to_datetime(prices["date"])
@@ -91,6 +118,8 @@ def calc_net_exposure(df: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
+    net["net_gex_norm"] = net["net_gex"] / net["underlying_price"]
+    net["net_dex_norm"] = net["net_dex"] / net["underlying_price"]
     return net
 
 
@@ -114,6 +143,9 @@ def add_gamma(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    print("Extracting opening and closing prices...")
+    extract_prices()
+
     print("Loading raw data...")
     raw = load_raw()
     print(f"  {len(raw)} rows loaded")
