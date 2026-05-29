@@ -57,3 +57,7 @@ Calculate dealer delta exposure DEX and net DEX under the assumption that dealer
 Similarly, calculate dealer gamma exposure GEX and net GEX, and visualize. Additional 0.01 multiplier is applied in GEX calculation due to the convention to use dollars per 1% move convention for gex calculation. The visualization of net GEX on 2026-5-15 doesn't look so weird.  
 
 Same as previous notebooks, the exposures are integrated in `src/process_raw_data.py` and compared with the result in notebook.  
+
+# 06_gamma_flip
+
+Explored gamma flip, but I haven't decided how to formulate gamma flip yet. I may choose to formulate as strike where cumulative GEX crosses zero in each timestamp, or follow https://flashalpha.com/concepts/gamma-flip.  
