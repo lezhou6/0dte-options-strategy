@@ -40,8 +40,10 @@ Run `python src/process_raw_data.py` to process raw data through the following s
 - Add `d1` and `gamma` calculated through Black-Scholes.  
 - Read `data/raw/oi` and add `open_interest`.  
 - Calculate and add `dex` and `gex`.  
-- Save to `data/processed/spy_processed.parquet`.   
-- Net DEX and GEX are calculated and saved to `data/processed/spy_exposure.parquet`.  
+- Save to `data/processed/spy_processed.parquet`.  
+- Calculate `net_dex` and `net_gex` from DEX, GEX and OI.  
+- Extract `atm_iv`, `iv_call_25d` and `iv_put_25d`, calculate `iv_skew_25d` and `iv_smile_curvature_25d`.  
+- Save to `data/processed/spy_exposure.parquet`.  
 
 
 # Output formulation

@@ -108,6 +108,65 @@ def add_exposure(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def calc_atm_iv(df: pd.DataFrame) -> pd.DataFrame:
+    df2 = df.assign(dist=(df["strike"] - df["underlying_price"]).abs())
+    min_dist = df2.groupby("timestamp")["dist"].transform("min")
+    return (
+        df2[df2["dist"] == min_dist]
+        .groupby("timestamp")["implied_vol"]
+        .mean()
+        .rename("atm_iv")
+        .reset_index()
+    )
+
+
+def calc_delta_iv(df: pd.DataFrame, target_delta: float) -> pd.DataFrame:
+    calls = df[df["right"] == "CALL"].copy()
+    puts = df[df["right"] == "PUT"].copy()
+
+    calls["dist"] = (calls["delta"] - target_delta).abs()
+    puts["dist"] = (puts["delta"] - (-target_delta)).abs()
+
+    min_call_dist = calls.groupby("timestamp")["dist"].transform("min")
+    min_put_dist = puts.groupby("timestamp")["dist"].transform("min")
+
+    d = int(target_delta * 100)
+    call_iv = (
+        calls[calls["dist"] == min_call_dist]
+        .groupby("timestamp")["implied_vol"]
+        .mean()
+        .rename(f"iv_call_{d}d")
+    )
+    put_iv = (
+        puts[puts["dist"] == min_put_dist]
+        .groupby("timestamp")["implied_vol"]
+        .mean()
+        .rename(f"iv_put_{d}d")
+    )
+    return pd.concat([call_iv, put_iv], axis=1).reset_index()
+
+
+def add_iv_features(
+    net: pd.DataFrame,
+    df: pd.DataFrame,
+    delta_targets: list[float] | None = None,
+) -> pd.DataFrame:
+    if delta_targets is None:
+        delta_targets = [0.25]
+
+    net = net.merge(calc_atm_iv(df), on="timestamp", how="left")
+
+    for target in delta_targets:
+        d = int(target * 100)
+        net = net.merge(calc_delta_iv(df, target), on="timestamp", how="left")
+        net[f"iv_skew_{d}d"] = net[f"iv_put_{d}d"] - net[f"iv_call_{d}d"]
+        net[f"iv_smile_curvature_{d}d"] = (
+            net[f"iv_call_{d}d"] + net[f"iv_put_{d}d"] - 2 * net["atm_iv"]
+        )
+
+    return net
+
+
 def calc_net_exposure(df: pd.DataFrame) -> pd.DataFrame:
     net = (
         df.groupby("timestamp")
@@ -187,9 +246,11 @@ def main() -> None:
     print(f"Saved {len(df)} rows to {OUT_PATH}")
     print(f"Columns: {list(df.columns)}")
 
-    exposure = calc_net_exposure(df)
-    exposure.to_parquet(AGGREGATE_PATH, index=False)
-    print(f"Saved {len(exposure)} rows to {AGGREGATE_PATH}")
+    aggregate = calc_net_exposure(df)
+    aggregate = add_iv_features(aggregate, df)
+    aggregate.to_parquet(AGGREGATE_PATH, index=False)
+    print(f"Saved {len(aggregate)} rows to {AGGREGATE_PATH}")
+    print(f"Columns: {list(aggregate.columns)}")
 
 
 if __name__ == "__main__":
