@@ -69,3 +69,7 @@ Add 25d call and put implied volatility. May consider using more delta but stick
 - iv_smile_curvature_25d = iv_put_25d + iv_call_25d - 2 * atm_iv  
 
 Then I visualize these two calculated values vs time.  
+
+# 08_theta_related
+
+Add theta exposure `tex` in main dataframe. A sign flip is applied due to consistency (dex sign flip), then theta exposure is aggregated into `net_tex`. Similar to dex and gex, a normalized `net_tex_norm` is also added. Time to maturity `ttm_min` and `ttm_hours` are added to aggregate dataframe, and used to calculate `theta_decay`. Concept of theta decay: https://flashalpha.com/concepts/theta-decay  
