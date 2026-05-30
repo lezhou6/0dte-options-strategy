@@ -61,3 +61,11 @@ Same as previous notebooks, the exposures are integrated in `src/process_raw_dat
 # 06_gamma_flip
 
 Explored gamma flip, but I haven't decided how to formulate gamma flip yet. I may choose to formulate as strike where cumulative GEX crosses zero in each timestamp, or follow https://flashalpha.com/concepts/gamma-flip.  
+
+# 07_iv
+
+Add 25d call and put implied volatility. May consider using more delta but stick to +-0.25 for now. Then, I used the two values to calculate:  
+- iv_skew_25d = iv_put_25d - iv_call_25d  
+- iv_smile_curvature_25d = iv_put_25d + iv_call_25d - 2 * atm_iv  
+
+Then I visualize these two calculated values vs time.  
