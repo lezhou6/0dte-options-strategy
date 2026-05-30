@@ -105,6 +105,7 @@ def add_exposure(df: pd.DataFrame) -> pd.DataFrame:
         * 100
         * 0.01
     )
+    df["tex"] = -df["theta"] * df["open_interest"] * 100
     return df
 
 
@@ -164,6 +165,27 @@ def add_iv_features(
             net[f"iv_call_{d}d"] + net[f"iv_put_{d}d"] - 2 * net["atm_iv"]
         )
 
+    return net
+
+
+def add_tex_features(net: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+    net_tex = (
+        df.groupby("timestamp")["tex"]
+        .sum()
+        .rename("net_tex")
+        .reset_index()
+    )
+    net = net.merge(net_tex, on="timestamp", how="left")
+    net["net_tex_norm"] = net["net_tex"] / net["underlying_price"]
+    ttm = (
+        df.groupby("timestamp")["ttm_min"]
+        .first()
+        .rename("ttm_min")
+        .reset_index()
+    )
+    net = net.merge(ttm, on="timestamp", how="left")
+    net["ttm_hours"] = net["ttm_min"] / 60
+    net["theta_decay"] = net["net_tex"] / net["ttm_hours"]
     return net
 
 
@@ -248,6 +270,7 @@ def main() -> None:
 
     aggregate = calc_net_exposure(df)
     aggregate = add_iv_features(aggregate, df)
+    aggregate = add_tex_features(aggregate, df)
     aggregate.to_parquet(AGGREGATE_PATH, index=False)
     print(f"Saved {len(aggregate)} rows to {AGGREGATE_PATH}")
     print(f"Columns: {list(aggregate.columns)}")

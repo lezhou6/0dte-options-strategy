@@ -39,11 +39,16 @@ Run `python src/process_raw_data.py` to process raw data through the following s
 - Add `log_return` = ln(spy_close / underlying_price), this is the label.  
 - Add `d1` and `gamma` calculated through Black-Scholes.  
 - Read `data/raw/oi` and add `open_interest`.  
-- Calculate and add `dex` and `gex`.  
+- Calculate and add delta exposure `dex`, gamma exposure `gex` and theta exposure `tex` from the greeks and OI.  
 - Save to `data/processed/spy_processed.parquet`.  
-- Calculate `net_dex` and `net_gex` from DEX, GEX and OI.  
+- Calculate `net_dex`, `net_gex` and `net_tex` from DEX, GEX and TEX.  
+- calculate `theta_decay` from `net_tex` and time to expiry.  
 - Extract `atm_iv`, `iv_call_25d` and `iv_put_25d`, calculate `iv_skew_25d` and `iv_smile_curvature_25d`.  
 - Save to `data/processed/spy_exposure.parquet`.  
+
+`data/processed/spy_processed.parquet` columns: ['symbol', 'expiration', 'strike', 'right', 'timestamp', 'bid', 'ask', 'delta', 'theta', 'vega', 'rho', 'epsilon', 'lambda', 'implied_vol', 'iv_error', 'underlying_timestamp', 'underlying_price', 'spy_close', 'spy_open', 'log_return_from_open', 'ttm_min', 'log_return', 'd1', 'gamma', 'open_interest', 'dex', 'gex', 'tex']  
+
+`data/processed/spy_exposure.parquet` columns:  ['timestamp', 'net_dex', 'net_gex', 'underlying_price', 'net_gex_norm', 'net_dex_norm', 'atm_iv', 'iv_call_25d', 'iv_put_25d', 'iv_skew_25d', 'iv_smile_curvature_25d', 'net_tex', 'net_tex_norm', 'ttm_min', 'ttm_hours', 'theta_decay']  
 
 
 # Output formulation
