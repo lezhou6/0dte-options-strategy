@@ -95,6 +95,65 @@ _MIN_TO_YEAR = 1.0 / (365 * 1440)
 _RISK_FREE_RATE = 0.04
 
 
+def add_oi_features(df: pd.DataFrame) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(OI_DIR, "*.parquet")))
+    if not files:
+        raise FileNotFoundError(f"No OI parquet files found in {OI_DIR}")
+    oi = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    oi = oi.drop(columns=["symbol", "timestamp"])
+    oi = oi.drop_duplicates(subset=["expiration", "strike", "right"], keep="first")
+    oi["expiration"] = pd.to_datetime(oi["expiration"])
+
+    total_oi = (
+        oi.groupby(["expiration", "strike"])["open_interest"]
+        .sum()
+        .rename("total_oi")
+        .reset_index()
+    )
+    put_oi = (
+        oi[oi["right"] == "PUT"][["expiration", "strike", "open_interest"]]
+        .rename(columns={"open_interest": "put_oi"})
+    )
+    strike_feats = total_oi.merge(put_oi, on=["expiration", "strike"], how="left")
+    strike_feats["put_oi_fraction"] = (
+        strike_feats["put_oi"].div(strike_feats["total_oi"]).where(strike_feats["total_oi"] > 0)
+    )
+
+    max_oi_strike = (
+        strike_feats.groupby("expiration")
+        .apply(lambda g: g.loc[g["total_oi"].idxmax(), "strike"])
+        .rename("max_oi_strike")
+        .reset_index()
+    )
+
+    top3 = (
+        strike_feats.groupby("expiration")["total_oi"]
+        .apply(lambda x: x.nlargest(3).sum())
+        .rename("top3_oi_sum")
+    )
+    day_total = strike_feats.groupby("expiration")["total_oi"].sum().rename("day_total_oi")
+    concentration = pd.concat([top3, day_total], axis=1).reset_index()
+    concentration["oi_concentration_top3"] = concentration["top3_oi_sum"] / concentration["day_total_oi"]
+
+    strike_feats = (
+        strike_feats[["expiration", "strike", "total_oi", "put_oi_fraction"]]
+        .merge(max_oi_strike, on="expiration")
+        .merge(concentration[["expiration", "oi_concentration_top3"]], on="expiration")
+    )
+
+    df = df.merge(strike_feats, on=["expiration", "strike"], how="left")
+    df["distance_to_max_oi"] = df["underlying_price"] - df["max_oi_strike"]
+    return df
+
+
+def add_bid_ask_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["bid_ask_mid"] = (df["bid"] + df["ask"]) / 2
+    df["bid_ask_spread"] = df["ask"] - df["bid"]
+    df["bid_ask_spread_norm"] = df["bid_ask_spread"] / df["bid_ask_mid"]
+    return df
+
+
 def add_exposure(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["dex"] = -df["delta"] * df["open_interest"] * df["underlying_price"] * 100
@@ -262,6 +321,12 @@ def main() -> None:
 
     df = add_exposure(df)
     print(f"  dex and gex calculated")
+
+    df = add_oi_features(df)
+    print(f"  OI features added (total_oi, put_oi_fraction, max_oi_strike, oi_concentration_top3, distance_to_max_oi)")
+
+    df = add_bid_ask_features(df)
+    print(f"  bid-ask features added")
 
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     df.to_parquet(OUT_PATH, index=False)
