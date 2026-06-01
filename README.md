@@ -25,31 +25,59 @@ Generated report is saved as `/data/visualization/spy_report.html`.
 See `notebooks/00_notebook_overview.md` for a more detailed overview.
 
 # Data construction and feature engineering
-Extract closing and opening prices from raw greeks `underlying_price` column at the closing time 16:00 and the opening time 9:30, and store in `data/processed/spy_closing_prices.csv` and `data/processed/spy_opening_prices.csv`. Choose csv for better readability.  
-Log-return log(closing price / price at snapshot) is used as label because log-return is conventional in quant ML.  
+Run `python src/process_raw_data.py` to read raw data from `data/raw` and generate the following files in `data/processed`:  
 
-Run `python src/process_raw_data.py` to process raw data through the following steps:  
-- Load raw greeks from `data/raw/greeks`.  
-- Extract and store closing / opening prices.  
-- Apply basic filter (implied_vol > 0, iv_error < 1.0, delta.abs().between(0.01, 0.99), bid > 0) to filter out meaningless data.  
-- Filter out opening (9:30) and closing (16:00) data.  
-- Read `data/processed/spy_closing_prices.csv` and `data/processed/spy_opening_prices.csv`, merge as `spy_close` and `spy_open`, assert uniqueness per expiration.  
-- Add `log_return_from_open` = ln(underlying_price / spy_open). 
-- Add `ttm_min` time to maturity (expiry) in minutes counting to 16:00.  
-- Add `log_return` = ln(spy_close / underlying_price), this is the label.  
-- Add `d1` and `gamma` calculated through Black-Scholes.  
-- Read `data/raw/oi` and add `open_interest`.  
-- Calculate and add delta exposure `dex`, gamma exposure `gex` and theta exposure `tex` from the greeks and OI.  
-- Save to `data/processed/spy_processed.parquet`.  
-- Calculate `net_dex`, `net_gex` and `net_tex` from DEX, GEX and TEX.  
-- calculate `theta_decay` from `net_tex` and time to expiry.  
-- Extract `atm_iv`, `iv_call_25d` and `iv_put_25d`, calculate `iv_skew_25d` and `iv_smile_curvature_25d`.  
-- Save to `data/processed/spy_exposure.parquet`.  
+## `spy_closing_prices.csv` and `spy_opening_prices.csv`
 
-`data/processed/spy_processed.parquet` columns: ['symbol', 'expiration', 'strike', 'right', 'timestamp', 'bid', 'ask', 'delta', 'theta', 'vega', 'rho', 'epsilon', 'lambda', 'implied_vol', 'iv_error', 'underlying_timestamp', 'underlying_price', 'spy_close', 'spy_open', 'log_return_from_open', 'ttm_min', 'log_return', 'd1', 'gamma', 'open_interest', 'dex', 'gex', 'tex']  
+Closing and opening prices are extracted from raw greeks `underlying_price` column at the closing time 16:00 and the opening time 9:30. Closing and opening prices have simple data type, so csv is chosen for better readability. Uniqueness per expiration is asserted.  
 
-`data/processed/spy_exposure.parquet` columns:  ['timestamp', 'net_dex', 'net_gex', 'underlying_price', 'net_gex_norm', 'net_dex_norm', 'atm_iv', 'iv_call_25d', 'iv_put_25d', 'iv_skew_25d', 'iv_smile_curvature_25d', 'net_tex', 'net_tex_norm', 'ttm_min', 'ttm_hours', 'theta_decay']  
+## `spy_processed.parquet`
 
+A very basic filter (implied_vol > 0, iv_error < 1.0, delta.abs().between(0.01, 0.99), bid > 0) is applied before feature engineering to filter out meaningless data. Opening (9:30) and closing (16:00) data is also filtered out to avoid 0 denominator in log-return calculation.  
+
+The following columns are directly from raw data: `symbol`, `expiration`, `strike`, `right`, `timestamp`, `bid`, `ask`, `delta`, `theta`, `vega`, `rho`, `epsilon`, `lambda`, `implied_vol`, `iv_error`, `underlying_timestamp`, `underlying_price`.  
+
+`spy_close` and `spy_open` are the closing and opening price on that day.  
+
+Log-return:  
+- `log_return_from_open` = ln(underlying_price / spy_open)  
+- `log_return` ln(closing price / price at snapshot) is used as label because log-return is conventional in quant ML   
+
+`ttm_min` is time to maturity (expiry) in minutes counting to 16:00.  
+
+Black-Scholes: `d1` and `gamma` are calculated from Black_scholes.  
+
+Open interest related:  
+- `open_interest` is read from raw oi data  
+- delta exposure `dex`, gamma exposure `gex` and theta exposure `tex` are calculated from OI and the corresponding greeks  
+- `total_oi` is the put + call OI at a (day, strike)  
+- `put_oi_fraction` = put OI / total OI at a (day, strike)  
+- `max_oi_strike` is the strike price with max OI at a day  
+- `oi_concentration_top3` is (top 3 largest put + call OI) / total OI in all strikes on the day  
+- `distance_to_max_oi` is underlying price - (max OI strike on that day)  
+
+Bid-ask features: 
+- `bid_ask_mid` = (bid + ask) / 2  
+- `bid_ask_spread` = ask - bid  
+- `bid_ask_spread_norm` = bid ask spread / bid ask mid   
+
+## `spy_aggregate.parquet`
+
+`timestamp` is the unique key in this table. `underlying_price` is the price at the timestamp.  
+
+Exposure:  
+- `net_dex`, `net_gex` and `net_tex` are aggregated from DEX, GEX and TEX  
+- `net_gex_norm`, `net_dex_norm`, `net_tex_norm` are normalized using underlying price  
+
+Implied Volatility related features:  
+- `atm_iv` at-the-money IV, the IV where the strike is closest to the underlying price
+- `iv_call_25d` and `iv_put_25d` are the call and put IV where delta is closest to ±0.25  
+- `iv_skew_25d` = iv_put_25d - iv_call_25d  
+-  `iv_smile_curvature_25d` = iv_put_25d + iv_call_25d - 2 * atm_iv
+
+`ttm_min` and `ttm_hours` are time to maturity in minutes and in hours.  
+
+`theta_decay` is calculated based on https://flashalpha.com/concepts/theta-decay   
 
 # Output formulation
 May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  
