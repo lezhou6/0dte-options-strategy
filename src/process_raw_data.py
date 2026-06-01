@@ -328,6 +328,13 @@ def main() -> None:
     df = add_bid_ask_features(df)
     print(f"  bid-ask features added")
 
+    before = len(df)
+    df = df[df["total_oi"] != 0]
+    df = df[df["ask"] != 0]
+    df = df[df["total_oi"].notna()]
+    print(f"  filtered {before - len(df)} rows (zero total_oi, zero ask, or NaN total_oi); {len(df)} remaining")
+
+
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     df.to_parquet(OUT_PATH, index=False)
     print(f"Saved {len(df)} rows to {OUT_PATH}")
