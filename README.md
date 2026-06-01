@@ -16,13 +16,9 @@ To generate a summary report based on raw data, run:
 Generated report is saved as `/data/visualization/spy_report.html`.  
 
 # Early exploration with raw data
-`notebooks/` contains some early exploration with raw data including:
-- clean meaningless data
-- check timezone handling
-- sanity check
-- visualization  
+`notebooks/` contains some early exploration with raw data including: data filtering, timezone handling verification, sanity check and visualization. Then, the features are designed and tested before implemented in src.  
 
-See `notebooks/00_notebook_overview.md` for a more detailed overview.
+See `notebooks/00_notebook_overview.md` for a more detailed overview.  
 
 # Data construction and feature engineering
 Run `python src/process_raw_data.py` to read raw data from `data/raw` and generate the following files in `data/processed`:  
@@ -60,6 +56,8 @@ Bid-ask features:
 - `bid_ask_mid` = (bid + ask) / 2  
 - `bid_ask_spread` = ask - bid  
 - `bid_ask_spread_norm` = bid ask spread / bid ask mid   
+
+Meaningless data with 0 or NaN OI or ask is filtered.  
 
 ## `spy_aggregate.parquet`
 
