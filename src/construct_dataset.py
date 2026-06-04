@@ -34,8 +34,24 @@ def main() -> None:
         .reset_index()
     )
 
+    total_oi = processed.groupby("timestamp")["open_interest"].sum()
+    put_oi = processed[processed["right"] == "PUT"].groupby("timestamp")["open_interest"].sum()
+    put_oi_fraction = (put_oi / total_oi).rename("put_oi_fraction").reset_index()
+
     model_input = aggregate.merge(log_returns, on="timestamp", how="left")
     model_input = model_input.merge(dist, on="timestamp", how="left")
+    model_input = model_input.merge(put_oi_fraction, on="timestamp", how="left")
+
+    for side, col in [("PUT", "put_max_oi_strike"), ("CALL", "call_max_oi_strike")]:
+        side_strike = (
+            processed[processed["right"] == side]
+            .sort_values("open_interest", ascending=False)
+            .groupby("timestamp")["strike"]
+            .first()
+            .rename(col)
+            .reset_index()
+        )
+        model_input = model_input.merge(side_strike, on="timestamp", how="left")
 
     ttm_years = model_input["ttm_min"] / _MIN_PER_YEAR
     model_input["log_return_norm"] = (
