@@ -22,13 +22,20 @@ def main() -> None:
     )
 
     inconsistent = (
-        processed.groupby("timestamp")[["log_return_from_open", "log_return"]]
+        processed.groupby("timestamp")[["log_return_from_open", "log_return", "distance_to_max_oi"]]
         .nunique()
     )
     assert (inconsistent > 1).any(axis=None).item() == False, \
-        "Inconsistent log_return values found for same timestamp"
+        "Inconsistent log_return / distance_to_max_oi values found for same timestamp"
+
+    dist = (
+        processed.groupby("timestamp")["distance_to_max_oi"]
+        .first()
+        .reset_index()
+    )
 
     model_input = aggregate.merge(log_returns, on="timestamp", how="left")
+    model_input = model_input.merge(dist, on="timestamp", how="left")
 
     ttm_years = model_input["ttm_min"] / _MIN_PER_YEAR
     model_input["log_return_norm"] = (
