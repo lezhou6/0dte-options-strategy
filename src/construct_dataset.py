@@ -30,23 +30,8 @@ def main() -> None:
 
     model_input = aggregate.merge(log_returns, on="timestamp", how="left")
 
-    maxoi = (
-        processed.sort_values("open_interest", ascending=False)
-        .groupby("timestamp")
-        .first()
-        .reset_index()
-        .rename(columns={c: "max_oi_" + c for c in processed.columns if c != "timestamp"})
-    )
-    model_input = model_input.merge(maxoi, on="timestamp", how="left")
-
-    nan_rows = model_input[model_input["max_oi_strike"].isna()]["timestamp"]
-    if not nan_rows.empty:
-        print(f"  {len(nan_rows)} timestamps missing max_oi row:")
-        for ts in nan_rows:
-            print(f"    {ts}")
-
     ttm_years = model_input["ttm_min"] / _MIN_PER_YEAR
-    model_input["log_return_normalized"] = (
+    model_input["log_return_norm"] = (
         model_input["log_return"] / (model_input["atm_iv"] * np.sqrt(ttm_years))
     )
 
