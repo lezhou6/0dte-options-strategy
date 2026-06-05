@@ -20,8 +20,8 @@ Generated report is saved as `/data/visualization/spy_report.html`.
 
 See `notebooks/00_notebook_overview.md` for a more detailed overview.  
 
-# Data construction and feature engineering
-Run `python src/process_raw_data.py` to read raw data from `data/raw` and generate the following files in `data/processed`:  
+# Feature engineering
+Run `python src/process_raw_data.py` to read raw data from `data/raw`, extract and calculate features, and generate the following files in `data/processed`:  
 
 ## `spy_closing_prices.csv` and `spy_opening_prices.csv`
 
@@ -76,6 +76,19 @@ Implied Volatility related features:
 `ttm_min` and `ttm_hours` are time to maturity in minutes and in hours.  
 
 `theta_decay` is calculated based on https://flashalpha.com/concepts/theta-decay   
+
+
+# Data construction  
+
+Construct the ready for model dataset by running: `python src/construct_dataset.py`. Results are saved to `data/model_input/`.  
+
+By default, 70/15/15 train/validation/test split is applied. To specify a different split, set `train` and `val` arguments. For example: `python src/construct_dataset.py --train 0.6 --val 0.2`  
+
+The dataset is mainly constructed from aggregate, and some data from processed are collapsed into scaler and added to the dataset.  
+
+The dataset is split by expiration date to avoid leakage. Metadata (expiration and underlying_price) is kept for later reconstruction, so features columns need to be explicitly specified during training.  
+
+TODO: add histogram features in a later version.  
 
 # Output formulation
 May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  
