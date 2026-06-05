@@ -244,7 +244,7 @@ def add_tex_features(net: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     )
     net = net.merge(ttm, on="timestamp", how="left")
     net["ttm_hours"] = net["ttm_min"] / 60
-    net["theta_decay"] = net["net_tex"] / net["ttm_hours"]
+    net["theta_decay"] = net["net_tex_norm"] / net["ttm_hours"]
     return net
 
 

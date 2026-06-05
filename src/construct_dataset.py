@@ -71,6 +71,14 @@ def main() -> None:
         model_input["log_return"] / (model_input["atm_iv"] * np.sqrt(ttm_years))
     )
 
+    for col, norm_col in [
+        ("distance_to_max_oi", "distance_to_max_oi_norm"),
+        ("put_max_oi_strike", "put_max_oi_strike_norm"),
+        ("call_max_oi_strike", "call_max_oi_strike_norm"),
+    ]:
+        model_input[norm_col] = model_input[col] / model_input["underlying_price"]
+        model_input = model_input.drop(columns=[col])
+
     model_input.insert(0, "expiration", model_input["timestamp"].dt.date)
 
     model_input = model_input.drop(columns=["timestamp", "net_dex", "net_gex", "net_tex", "ttm_hours", "log_return"])
