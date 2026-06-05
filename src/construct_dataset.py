@@ -22,14 +22,20 @@ def main() -> None:
     )
 
     inconsistent = (
-        processed.groupby("timestamp")[["log_return_from_open", "log_return", "distance_to_max_oi"]]
+        processed.groupby("timestamp")[["log_return_from_open", "log_return", "distance_to_max_oi", "oi_concentration_top3"]]
         .nunique()
     )
     assert (inconsistent > 1).any(axis=None).item() == False, \
-        "Inconsistent log_return / distance_to_max_oi values found for same timestamp"
+        "Inconsistent log_return / distance_to_max_oi / oi_concentration_top3 values found for same timestamp"
 
     dist = (
         processed.groupby("timestamp")["distance_to_max_oi"]
+        .first()
+        .reset_index()
+    )
+
+    oi_concentration = (
+        processed.groupby("timestamp")["oi_concentration_top3"]
         .first()
         .reset_index()
     )
@@ -40,6 +46,7 @@ def main() -> None:
 
     model_input = aggregate.merge(log_returns, on="timestamp", how="left")
     model_input = model_input.merge(dist, on="timestamp", how="left")
+    model_input = model_input.merge(oi_concentration, on="timestamp", how="left")
     model_input = model_input.merge(put_oi_fraction, on="timestamp", how="left")
 
     for side, col in [("PUT", "put_max_oi_strike"), ("CALL", "call_max_oi_strike")]:
