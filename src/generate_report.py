@@ -11,6 +11,8 @@ from plotly.subplots import make_subplots
 RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "visualization", "spy_report.html")
 
+MAX_DAYS = 10
+
 COLORS = [
     "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
     "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
@@ -267,9 +269,16 @@ def main() -> None:
     exps = sorted(df["expiration"].unique())
     print(f"  {len(exps)} expirations: {exps[0]} → {exps[-1]}")
 
+    df_full = df
+    if len(exps) > MAX_DAYS:
+        indices = np.round(np.linspace(0, len(exps) - 1, MAX_DAYS)).astype(int)
+        selected = [exps[i] for i in indices]
+        print(f"  Sampling {MAX_DAYS} days across full range: {selected[0]} → {selected[-1]}")
+        df = df[df["expiration"].isin(selected)]
+
     print("Building figures...")
     fig_atm = build_atm_fig(df)
-    fig_price = build_price_fig(df)
+    fig_price = build_price_fig(df_full)
     fig_smile = build_smile_fig(df)
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
