@@ -102,7 +102,7 @@ def main() -> None:
 
     model_input.insert(0, "expiration", model_input["timestamp"].dt.date)
 
-    model_input = model_input.drop(columns=["timestamp", "net_dex", "net_gex", "net_tex", "ttm_hours", "log_return"])
+    model_input = model_input.drop(columns=["net_dex", "net_gex", "net_tex", "ttm_hours", "log_return"])
 
     train, val, test = split_by_date(model_input, args.train, args.val)
 
