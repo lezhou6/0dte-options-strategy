@@ -89,9 +89,8 @@ def main() -> None:
         model_input = model_input.merge(side_strike, on="timestamp", how="left")
 
     ttm_years = model_input["ttm_min"] / _MIN_PER_YEAR
-    model_input["log_return_norm"] = (
-        model_input["log_return"] / (model_input["atm_iv"] * np.sqrt(ttm_years))
-    )
+    model_input["norm_factor"] = model_input["atm_iv"] * np.sqrt(ttm_years)
+    model_input["log_return_norm"] = model_input["log_return"] / model_input["norm_factor"]
 
     for col, norm_col in [
         ("distance_to_max_oi", "distance_to_max_oi_norm"),

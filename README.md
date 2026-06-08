@@ -37,7 +37,7 @@ The following columns are directly from raw data: `symbol`, `expiration`, `strik
 
 Log-return:  
 - `log_return_from_open` = ln(underlying_price / spy_open)  
-- `log_return` ln(closing price / price at snapshot) is used as label because log-return is conventional in quant ML   
+- `log_return` ln(closing price / price at snapshot) is the target. Log-return is conventional in quant ML   
 
 `ttm_min` is time to maturity (expiry) in minutes counting to 16:00.  
 
@@ -81,6 +81,8 @@ Implied Volatility related features:
 # Data construction  
 
 Construct the ready for model dataset by running: `python src/construct_dataset.py`. Results are saved to `data/model_input/`.  
+
+Price related reatures are normalized by underlying_price, and the target log-return is normalized as: `log_return / (atm_iv * sqrt(ttm_years))`. `(atm_iv * sqrt(ttm_years)` is saved as new column `norm_factor` for later calculation.  
 
 By default, 70/15/15 train/validation/test split is applied. To specify a different split, set `train` and `val` arguments. For example: `python src/construct_dataset.py --train 0.6 --val 0.2`  
 
