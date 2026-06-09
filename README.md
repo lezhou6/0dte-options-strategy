@@ -5,14 +5,14 @@ Potential formulation: train a model to predict a distribution of closing (end-o
 # Raw data
 This project uses Theta Data https://www.thetadata.net/ Options data. A standard option data plan is required to run this project.  
 Python library `thetadata` is used to fetch raw data from Theta Data. Add a `creds.txt` with Theta Data username and id under current directory to use thetadata library.  
-Run `python src/fetch_raw_data.py` to fetch the following raw data:  
+Run `python src/preprocess/fetch_raw_data.py` to fetch the following raw data:  
 - raw greeks and store in `data/raw/greeks/[symbol]` as parquet files (to preserve data type)
 - raw open interest and store in `data/raw/oi/[symbol]` as parquet files  
 By default, the raw data of SPY from 2026-05-06 to 2026-05-19 are fetched. Customize a range by setting `symbol`, `end` for end date and `periods` in days:  
-`python src/fetch_raw_data.py --symbol AAPL --end 2026-05-22 --periods 5`  
+`python src/preprocess/fetch_raw_data.py --symbol AAPL --end 2026-05-22 --periods 5`  
 
 To generate a summary report based on raw data, run:  
-`python src/generate_report.py`  
+`python src/preprocess/generate_report.py`  
 Generated report is saved as `/data/visualization/spy_report.html`.  
 
 # Early exploration with raw data
@@ -21,7 +21,7 @@ Generated report is saved as `/data/visualization/spy_report.html`.
 See `notebooks/00_notebook_overview.md` for a more detailed overview.  
 
 # Feature engineering
-Run `python src/process_raw_data.py` to read raw data from `data/raw`, extract and calculate features, and generate the following files in `data/processed`:  
+Run `python src/preprocess/process_raw_data.py` to read raw data from `data/raw`, extract and calculate features, and generate the following files in `data/processed`:  
 
 ## `spy_closing_prices.csv` and `spy_opening_prices.csv`
 
@@ -80,11 +80,11 @@ Implied Volatility related features:
 
 # Data construction  
 
-Construct the ready for model dataset by running: `python src/construct_dataset.py`. Results are saved to `data/model_input/`.  
+Construct the ready for model dataset by running: `python src/preprocess/construct_dataset.py`. Results are saved to `data/model_input/`.  
 
 Price related reatures are normalized by underlying_price, and the target log-return is normalized as: `log_return / (atm_iv * sqrt(ttm_years))`. `(atm_iv * sqrt(ttm_years)` is saved as new column `norm_factor` for later calculation.  
 
-By default, 70/15/15 train/validation/test split is applied. To specify a different split, set `train` and `val` arguments. For example: `python src/construct_dataset.py --train 0.6 --val 0.2`  
+By default, 70/15/15 train/validation/test split is applied. To specify a different split, set `train` and `val` arguments. For example: `python src/preprocess/construct_dataset.py --train 0.6 --val 0.2`  
 
 The dataset is mainly constructed from aggregate, and some data from processed are collapsed into scaler and added to the dataset.  
 
