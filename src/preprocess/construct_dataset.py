@@ -6,8 +6,8 @@ import os
 import numpy as np
 import pandas as pd
 
-PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
-OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "model_input")
+PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed")
+OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "model_input")
 
 _MIN_PER_YEAR = 365 * 1440  # calendar days × minutes per day
 

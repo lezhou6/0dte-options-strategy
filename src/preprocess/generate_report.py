@@ -8,8 +8,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
-OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "visualization", "spy_report.html")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks", "SPY")
+OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visualization", "spy_report.html")
 
 MAX_DAYS = 10
 

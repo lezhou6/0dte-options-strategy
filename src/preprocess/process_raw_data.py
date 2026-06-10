@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks", "SPY")
-OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi", "SPY")
-PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
+RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks", "SPY")
+OI_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "oi", "SPY")
+PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed")
 OUT_PATH = os.path.join(PROCESSED_DIR, "spy_processed.parquet")
 AGGREGATE_PATH = os.path.join(PROCESSED_DIR, "spy_aggregate.parquet")
 

@@ -7,8 +7,8 @@ from datetime import date
 import pandas as pd
 from thetadata import ThetaClient
 
-GREEKS_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "greeks")
-OI_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "oi")
+GREEKS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks")
+OI_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "oi")
 
 
 def _trading_days(end: str, periods: int) -> list[date]:
