@@ -35,7 +35,7 @@ def load_data() -> pd.DataFrame:
 
 
 def build_atm_fig(df: pd.DataFrame) -> go.Figure:
-    """ATM mid price vs minutes to expiration, slider selects number of days shown."""
+    """ATM mid price vs minutes to expiration."""
     df = df.copy()
     df["strike_dist"] = (df["strike"] - df["underlying_price"]).abs()
     atm = df.loc[df.groupby(["expiration", "timestamp", "right"])["strike_dist"].idxmin()].copy()
@@ -45,7 +45,6 @@ def build_atm_fig(df: pd.DataFrame) -> go.Figure:
     atm["ttm_min"] = (close_dt - atm["timestamp"]).dt.total_seconds() / 60
 
     exps = sorted(atm["expiration"].unique())
-    N = len(exps)
 
     fig = make_subplots(
         rows=1, cols=2,
@@ -78,27 +77,13 @@ def build_atm_fig(df: pd.DataFrame) -> go.Figure:
             )
             trace_meta.append((exp, right))
 
-    steps = []
-    for k in range(1, N + 1):
-        sel = set(np.round(np.linspace(0, N - 1, k)).astype(int).tolist())
-        sel_exps = {exps[i] for i in sel}
-        visible = [exp in sel_exps for (exp, _) in trace_meta]
-        steps.append(dict(method="restyle", args=[{"visible": visible}], label=str(k)))
-
     fig.update_xaxes(autorange="reversed", title_text="Minutes to expiration")
     fig.update_yaxes(title_text="Mid price ($)")
     fig.update_layout(
         template="plotly_dark",
         title="ATM Option Mid Price vs Time to Expiration",
         legend=dict(title="Expiration"),
-        sliders=[dict(
-            active=N - 1,
-            steps=steps,
-            currentvalue={"prefix": "Days shown: "},
-            pad={"t": 50},
-        )],
         height=520,
-        margin=dict(b=80),
     )
     return fig
 
@@ -163,13 +148,8 @@ def _smile_xy(
 
 
 def build_smile_fig(df: pd.DataFrame, default_time: str = "12:00") -> go.Figure:
-    """IV smile (IV vs moneyness) with time dropdown and num-days slider.
-
-    x=0 is always ATM, centering the smile regardless of underlying level.
-    Time dropdown and num-days slider are independent controls.
-    """
+    """IV smile (IV vs moneyness) with time dropdown."""
     exps = sorted(df["expiration"].unique())
-    N = len(exps)
     times = sorted(df["timestamp"].dt.strftime("%H:%M").unique())
     if default_time not in times:
         default_time = times[len(times) // 2]
@@ -211,14 +191,6 @@ def build_smile_fig(df: pd.DataFrame, default_time: str = "12:00") -> go.Figure:
             new_y.append(y)
         time_buttons.append(dict(label=t, method="restyle", args=[{"x": new_x, "y": new_y}]))
 
-    # Num-days slider — updates visibility only, does not touch data
-    steps = []
-    for k in range(1, N + 1):
-        sel = set(np.round(np.linspace(0, N - 1, k)).astype(int).tolist())
-        sel_exps = {exps[i] for i in sel}
-        visible = [exp in sel_exps for (exp, _) in trace_meta]
-        steps.append(dict(method="restyle", args=[{"visible": visible}], label=str(k)))
-
     fig.update_xaxes(
         title_text="Moneyness (%)",
         zeroline=True,
@@ -243,14 +215,8 @@ def build_smile_fig(df: pd.DataFrame, default_time: str = "12:00") -> go.Figure:
             bordercolor="#555",
             font=dict(color="#d1d4dc"),
         )],
-        sliders=[dict(
-            active=N - 1,
-            steps=steps,
-            currentvalue={"prefix": "Days shown: "},
-            pad={"t": 50},
-        )],
         height=560,
-        margin=dict(b=80, t=120),
+        margin=dict(t=120),
         annotations=[dict(
             text="Time:",
             x=0.38, xanchor="right",
