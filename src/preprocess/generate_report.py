@@ -8,8 +8,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks", "SPY")
-OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visualization", "spy_report.html")
+GREEKS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks")
+VIZ_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visualization")
 
 MAX_DAYS = 10
 
@@ -19,10 +19,10 @@ COLORS = [
 ]
 
 
-def load_data() -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(RAW_DIR, "*.parquet")))
+def load_data(raw_dir: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(raw_dir, "*.parquet")))
     if not files:
-        raise FileNotFoundError(f"No parquet files in {RAW_DIR}")
+        raise FileNotFoundError(f"No parquet files in {raw_dir}")
     raw = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     df = raw[
         (raw["implied_vol"] > 0)
@@ -110,7 +110,7 @@ def build_price_fig(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         template="plotly_dark",
-        title="SPY Underlying Price (15m intervals)",
+        title="Underlying Price (15m intervals)",
         xaxis=dict(
             title="Date",
             rangebreaks=[
@@ -229,9 +229,10 @@ def build_smile_fig(df: pd.DataFrame, default_time: str = "12:00") -> go.Figure:
     return fig
 
 
-def main() -> None:
-    print("Loading data...")
-    df = load_data()
+def generate_symbol_report(symbol: str) -> None:
+    raw_dir = os.path.join(GREEKS_DIR, symbol)
+    print(f"Loading data for {symbol}...")
+    df = load_data(raw_dir)
     exps = sorted(df["expiration"].unique())
     print(f"  {len(exps)} expirations: {exps[0]} → {exps[-1]}")
 
@@ -242,12 +243,13 @@ def main() -> None:
         print(f"  Sampling {MAX_DAYS} days across full range: {selected[0]} → {selected[-1]}")
         df = df[df["expiration"].isin(selected)]
 
-    print("Building figures...")
+    print(f"  Building figures...")
     fig_atm = build_atm_fig(df)
     fig_price = build_price_fig(df_full)
     fig_smile = build_smile_fig(df)
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    os.makedirs(VIZ_DIR, exist_ok=True)
+    out_path = os.path.join(VIZ_DIR, f"{symbol}_report.html")
     html_atm = fig_atm.to_html(full_html=False, include_plotlyjs=False)
     html_price = fig_price.to_html(full_html=False, include_plotlyjs=False)
     html_smile = fig_smile.to_html(full_html=False, include_plotlyjs=False)
@@ -256,7 +258,7 @@ def main() -> None:
 <html>
 <head>
 <meta charset="utf-8">
-<title>SPY 0DTE Analysis</title>
+<title>{symbol} 0DTE Analysis</title>
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <style>
   body {{
@@ -286,16 +288,27 @@ def main() -> None:
 </style>
 </head>
 <body>
-<h1>SPY 0DTE Analysis</h1>
+<h1>{symbol} 0DTE Analysis</h1>
 <div class="section"><h2>ATM Option Price Decay</h2>{html_atm}</div>
 <div class="section"><h2>Underlying Price</h2>{html_price}</div>
 <div class="section"><h2>IV Smile</h2>{html_smile}</div>
 </body>
 </html>"""
 
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write(report)
-    print(f"Report saved to {OUT_PATH}")
+    print(f"  Report saved to {out_path}")
+
+
+def main() -> None:
+    symbols = [
+        d for d in os.listdir(GREEKS_DIR)
+        if os.path.isdir(os.path.join(GREEKS_DIR, d))
+    ]
+    if not symbols:
+        raise FileNotFoundError(f"No symbol directories found in {GREEKS_DIR}")
+    for symbol in sorted(symbols):
+        generate_symbol_report(symbol)
 
 
 if __name__ == "__main__":
