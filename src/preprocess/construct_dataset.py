@@ -1,4 +1,4 @@
-"""Construct model input by joining log returns from spy_processed into spy_aggregate."""
+"""Construct model input by joining log returns from {symbol}_processed into {symbol}_aggregate."""
 
 import argparse
 import os
@@ -12,30 +12,14 @@ OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "model_inp
 _MIN_PER_YEAR = 365 * 1440  # calendar days × minutes per day
 
 
-def split_by_date(df: pd.DataFrame, train_frac: float, val_frac: float) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    dates = sorted(df["expiration"].unique())
-    n = len(dates)
-    n_train = round(n * train_frac)
-    n_val = round(n * val_frac)
-    train_dates = set(dates[:n_train])
-    val_dates = set(dates[n_train:n_train + n_val])
-    test_dates = set(dates[n_train + n_val:])
-    return (
-        df[df["expiration"].isin(train_dates)],
-        df[df["expiration"].isin(val_dates)],
-        df[df["expiration"].isin(test_dates)],
-    )
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train", type=float, default=0.70)
-    parser.add_argument("--val", type=float, default=0.15)
+    parser.add_argument("--symbol", type=str, default="SPY")
     args = parser.parse_args()
-    if args.train + args.val >= 1.0:
-        parser.error(f"--train ({args.train}) + --val ({args.val}) must be less than 1.0")
-    processed = pd.read_parquet(os.path.join(PROCESSED_DIR, "spy_processed.parquet"))
-    aggregate = pd.read_parquet(os.path.join(PROCESSED_DIR, "spy_aggregate.parquet"))
+    sym = args.symbol.lower()
+    processed = pd.read_parquet(os.path.join(PROCESSED_DIR, f"{sym}_processed.parquet"))
+    aggregate = pd.read_parquet(os.path.join(PROCESSED_DIR, f"{sym}_aggregate.parquet"))
 
     log_returns = (
         processed.groupby("timestamp")[["log_return_from_open", "log_return"]]
@@ -104,13 +88,10 @@ def main() -> None:
 
     model_input = model_input.drop(columns=["net_dex", "net_gex", "net_tex", "ttm_hours", "log_return"])
 
-    train, val, test = split_by_date(model_input, args.train, args.val)
-
     os.makedirs(OUT_DIR, exist_ok=True)
-    for split, name in [(train, "train"), (val, "validation"), (test, "test")]:
-        path = os.path.join(OUT_DIR, f"{name}.parquet")
-        split.to_parquet(path, index=False)
-        print(f"Saved {len(split)} rows ({split['expiration'].nunique()} days) to {path}")
+    path = os.path.join(OUT_DIR, f"{args.symbol}.parquet")
+    model_input.to_parquet(path, index=False)
+    print(f"Saved {len(model_input)} rows ({model_input['expiration'].nunique()} days) to {path}")
     print(f"Columns: {list(model_input.columns)}")
 
 

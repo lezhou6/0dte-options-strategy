@@ -84,11 +84,9 @@ Construct the ready for model dataset by running: `python src/preprocess/constru
 
 Price related reatures are normalized by underlying_price, and the target log-return is normalized as: `log_return / (atm_iv * sqrt(ttm_years))`. `(atm_iv * sqrt(ttm_years)` is saved as new column `norm_factor` for later calculation.  
 
-By default, 70/15/15 train/validation/test split is applied. To specify a different split, set `train` and `val` arguments. For example: `python src/preprocess/construct_dataset.py --train 0.6 --val 0.2`  
-
 The dataset is mainly constructed from aggregate, and some data from processed are collapsed into scaler and added to the dataset.  
 
-The dataset is split by expiration date to avoid leakage. Metadata (expiration and underlying_price) is kept for later reconstruction, so features columns need to be explicitly specified during training.  
+The dataset keeps expiration date for later use to avoid leakage. Metadata (expiration and underlying_price) is kept for later reconstruction, so features columns need to be explicitly specified during training.  
 
 TODO: add histogram features in a later version.  
 
