@@ -1,6 +1,20 @@
 # Project goal
-Study 0DTE options to help trading decision.  
-Potential formulation: train a model to predict a distribution of closing (end-of-day) price.
+Study Zero-day-to-expiration options to help trading decisions.  
+
+Motivation: 0DTE options went from a niche product to roughly half the market in just a few years. 0DTE options have large trading volume, and the growth has outpaced research coverage.  
+
+Research question: Given the observable options-market state (eg. implied volatility, greeks, open-interest exposures) at an intraday snapshot, can we estimate a probability distribution for the underlying's closing price at end-of-day — and does that distribution provide decision-relevant information for 0DTE option positioning?  
+
+Challenges:  
+- Data and market microstructure  
+    - Intraday data is extremely noisy  
+    - No intraday open interest because OI is only updated once per day  
+    - Some greeks become explosive as time to maturity approaches 0  
+- Modeling challenge  
+    - Hard to model distribution due to non-stationarity of market regime  
+    - Multiple intraday snapshot but only one closing price realization per trading day  
+- Evaluation  
+    - Hard to validate against true probabilities due to only one realized closing price  
 
 # Raw data
 This project uses Theta Data https://www.thetadata.net/ Options data. A standard option data plan is required to run this project.  
