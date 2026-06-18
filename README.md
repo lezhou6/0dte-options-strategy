@@ -98,6 +98,8 @@ Construct the ready for model dataset by running: `python src/preprocess/constru
 
 Price related reatures are normalized by underlying_price, and the target log-return is normalized as: `log_return / (atm_iv * sqrt(ttm_years))`. `(atm_iv * sqrt(ttm_years)` is saved as new column `norm_factor` for later calculation.  
 
+For exploratory data analysis about the normalized log return, run `python src/eda/output_distribution.py --symbol SPY --start-date 2025-01-01 --end-date 2026-06-01` to see a histogram of the normalized log return and a fitted normal distribution in `data/visualization/log_return_norm/`.  
+
 The dataset is mainly constructed from aggregate, and some data from processed are collapsed into scaler and added to the dataset.  
 
 The dataset keeps expiration date for later use to avoid leakage. Metadata (expiration and underlying_price) is kept for later reconstruction, so features columns need to be explicitly specified during training.  
