@@ -26,7 +26,7 @@ By default, the raw data of SPY from 2026-05-06 to 2026-05-19 are fetched. Custo
 `python src/preprocess/fetch_raw_data.py --symbol AAPL --end 2026-05-22 --periods 5`  
 
 To generate a summary report based on raw data, run:  
-`python src/preprocess/generate_report.py`  
+`python src/eda/generate_report.py`  
 Generated report is saved as `/data/visualization/spy_report.html`.  
 
 # Early exploration with raw data
