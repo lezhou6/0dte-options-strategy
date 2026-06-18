@@ -27,7 +27,7 @@ By default, the raw data of SPY from 2026-05-06 to 2026-05-19 are fetched. Custo
 
 To generate a summary report based on raw data, run:  
 `python src/eda/generate_report.py`  
-Generated report is saved as `/data/visualization/spy_report.html`.  
+This generate a raw data report for each symbol and save as  `/data/visualization/raw_data/reports/[symbol]_report.html`.  
 
 # Early exploration with raw data
 `notebooks/` contains some early exploration with raw data including: data filtering, timezone handling verification, sanity check and visualization. Then, the features are designed and tested before implemented in src.  

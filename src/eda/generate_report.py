@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 GREEKS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks")
-VIZ_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visualization")
+VIZ_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visualization", "raw_data_reports")
 
 MAX_DAYS = 10
 
