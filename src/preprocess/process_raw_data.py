@@ -1,5 +1,11 @@
-"""Process raw SPY greeks into a clean, feature-enriched parquet for modelling."""
+"""Process raw option greeks into clean, feature-enriched parquets for modelling.
 
+Processes every underlying symbol found in data/raw/greeks (one subdirectory per symbol),
+or a single symbol via --symbol. Outputs {symbol}_processed.parquet and
+{symbol}_aggregate.parquet (plus {symbol}_opening/closing_prices.csv) under data/processed.
+"""
+
+import argparse
 import glob
 import os
 
@@ -7,17 +13,24 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks", "SPY")
-OI_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "oi", "SPY")
+RAW_BASE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "greeks")
+OI_BASE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "oi")
 PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "processed")
-OUT_PATH = os.path.join(PROCESSED_DIR, "spy_processed.parquet")
-AGGREGATE_PATH = os.path.join(PROCESSED_DIR, "spy_aggregate.parquet")
 
 
-def load_raw() -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(RAW_DIR, "*.parquet")))
+def discover_symbols() -> list[str]:
+    """All symbols with a raw greeks subdirectory."""
+    if not os.path.isdir(RAW_BASE):
+        raise FileNotFoundError(f"Raw greeks directory not found: {RAW_BASE}")
+    return sorted(
+        d for d in os.listdir(RAW_BASE) if os.path.isdir(os.path.join(RAW_BASE, d))
+    )
+
+
+def load_raw(raw_dir: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(raw_dir, "*.parquet")))
     if not files:
-        raise FileNotFoundError(f"No parquet files found in {RAW_DIR}")
+        raise FileNotFoundError(f"No parquet files found in {raw_dir}")
     return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
 
 
@@ -37,10 +50,10 @@ def filter_open_close(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _extract_prices(hour: int, minute: int, col_name: str) -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(RAW_DIR, "*.parquet")))
+def _extract_prices(raw_dir: str, hour: int, minute: int, col_name: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(raw_dir, "*.parquet")))
     if not files:
-        raise FileNotFoundError(f"No parquet files found in {RAW_DIR}")
+        raise FileNotFoundError(f"No parquet files found in {raw_dir}")
     records = []
     for path in files:
         date_str = os.path.splitext(os.path.basename(path))[0]
@@ -53,13 +66,13 @@ def _extract_prices(hour: int, minute: int, col_name: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def extract_prices() -> None:
+def extract_prices(raw_dir: str, sym: str) -> None:
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     for (hour, minute), filename, col in [
-        ((9, 30), "spy_opening_prices.csv", "opening_price"),
-        ((16, 0), "spy_closing_prices.csv", "closing_price"),
+        ((9, 30), f"{sym}_opening_prices.csv", "opening_price"),
+        ((16, 0), f"{sym}_closing_prices.csv", "closing_price"),
     ]:
-        result = _extract_prices(hour, minute, col)
+        result = _extract_prices(raw_dir, hour, minute, col)
         result.to_csv(os.path.join(PROCESSED_DIR, filename), index=False)
         print(f"  Saved {len(result)} rows to {filename}")
 
@@ -78,10 +91,10 @@ def merge_daily_price(df: pd.DataFrame, csv_path: str, price_col: str) -> pd.Dat
     return df
 
 
-def merge_oi(df: pd.DataFrame) -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(OI_DIR, "*.parquet")))
+def merge_oi(df: pd.DataFrame, oi_dir: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(oi_dir, "*.parquet")))
     if not files:
-        raise FileNotFoundError(f"No OI parquet files found in {OI_DIR}")
+        raise FileNotFoundError(f"No OI parquet files found in {oi_dir}")
     oi = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     oi = oi.drop(columns=["symbol", "timestamp"])
     oi = oi.drop_duplicates(subset=["expiration", "strike", "right"], keep="first")
@@ -95,10 +108,10 @@ _MIN_TO_YEAR = 1.0 / (365 * 1440)
 _RISK_FREE_RATE = 0.04
 
 
-def add_oi_features(df: pd.DataFrame) -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(OI_DIR, "*.parquet")))
+def add_oi_features(df: pd.DataFrame, oi_dir: str) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(oi_dir, "*.parquet")))
     if not files:
-        raise FileNotFoundError(f"No OI parquet files found in {OI_DIR}")
+        raise FileNotFoundError(f"No OI parquet files found in {oi_dir}")
     oi = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     oi = oi.drop(columns=["symbol", "timestamp"])
     oi = oi.drop_duplicates(subset=["expiration", "strike", "right"], keep="first")
@@ -282,12 +295,20 @@ def add_gamma(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def main() -> None:
+def process_symbol(symbol: str) -> None:
+    """Run the full processing pipeline for one underlying symbol."""
+    raw_dir = os.path.join(RAW_BASE, symbol)
+    oi_dir = os.path.join(OI_BASE, symbol)
+    sym = symbol.lower()
+    out_path = os.path.join(PROCESSED_DIR, f"{sym}_processed.parquet")
+    aggregate_path = os.path.join(PROCESSED_DIR, f"{sym}_aggregate.parquet")
+
+    print(f"\n=== {symbol} ===")
     print("Extracting opening and closing prices...")
-    extract_prices()
+    extract_prices(raw_dir, sym)
 
     print("Loading raw data...")
-    raw = load_raw()
+    raw = load_raw(raw_dir)
     print(f"  {len(raw)} rows loaded")
 
     df = apply_filter(raw)
@@ -296,33 +317,33 @@ def main() -> None:
     df = filter_open_close(df)
     print(f"  {len(df)} rows after removing 9:30 / 16:00 snapshots")
 
-    closing_csv = os.path.join(PROCESSED_DIR, "spy_closing_prices.csv")
-    df = merge_daily_price(df, closing_csv, "spy_close")
-    print(f"  spy_close merged and verified")
+    closing_csv = os.path.join(PROCESSED_DIR, f"{sym}_closing_prices.csv")
+    df = merge_daily_price(df, closing_csv, "close")
+    print(f"  close merged and verified")
 
-    opening_csv = os.path.join(PROCESSED_DIR, "spy_opening_prices.csv")
-    df = merge_daily_price(df, opening_csv, "spy_open")
-    print(f"  spy_open merged and verified")
+    opening_csv = os.path.join(PROCESSED_DIR, f"{sym}_opening_prices.csv")
+    df = merge_daily_price(df, opening_csv, "open")
+    print(f"  open merged and verified")
 
-    df["log_return_from_open"] = np.log(df["underlying_price"] / df["spy_open"])
+    df["log_return_from_open"] = np.log(df["underlying_price"] / df["open"])
 
     close_dt = df["timestamp"].apply(
         lambda t: t.replace(hour=16, minute=0, second=0, microsecond=0)
     )
     df["ttm_min"] = (close_dt - df["timestamp"]).dt.total_seconds() / 60
 
-    df["log_return"] = np.log(df["spy_close"] / df["underlying_price"])
+    df["log_return"] = np.log(df["close"] / df["underlying_price"])
 
     df = add_gamma(df)
     print(f"  d1 and gamma calculated")
 
-    df = merge_oi(df)
+    df = merge_oi(df, oi_dir)
     print(f"  open_interest merged ({df['open_interest'].gt(0).sum()} non-zero rows)")
 
     df = add_exposure(df)
     print(f"  dex and gex calculated")
 
-    df = add_oi_features(df)
+    df = add_oi_features(df, oi_dir)
     print(f"  OI features added (total_oi, put_oi_fraction, max_oi_strike, oi_concentration_top3, distance_to_max_oi)")
 
     df = add_bid_ask_features(df)
@@ -334,18 +355,43 @@ def main() -> None:
     df = df[df["total_oi"].notna()]
     print(f"  filtered {before - len(df)} rows (zero total_oi, zero ask, or NaN total_oi); {len(df)} remaining")
 
-
     os.makedirs(PROCESSED_DIR, exist_ok=True)
-    df.to_parquet(OUT_PATH, index=False)
-    print(f"Saved {len(df)} rows to {OUT_PATH}")
+    df.to_parquet(out_path, index=False)
+    print(f"Saved {len(df)} rows to {out_path}")
     print(f"Columns: {list(df.columns)}")
 
     aggregate = calc_net_exposure(df)
     aggregate = add_iv_features(aggregate, df)
     aggregate = add_tex_features(aggregate, df)
-    aggregate.to_parquet(AGGREGATE_PATH, index=False)
-    print(f"Saved {len(aggregate)} rows to {AGGREGATE_PATH}")
+    aggregate.to_parquet(aggregate_path, index=False)
+    print(f"Saved {len(aggregate)} rows to {aggregate_path}")
     print(f"Columns: {list(aggregate.columns)}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--symbol",
+        type=str,
+        default=None,
+        help="Process a single symbol (default: every symbol in data/raw/greeks)",
+    )
+    args = parser.parse_args()
+
+    symbols = [args.symbol] if args.symbol else discover_symbols()
+    print(f"Processing {len(symbols)} symbol(s): {symbols}")
+
+    failed = []
+    for symbol in symbols:
+        try:
+            process_symbol(symbol)
+        except Exception as exc:  # keep going so one bad symbol doesn't abort the batch
+            print(f"ERROR processing {symbol}: {type(exc).__name__}: {exc}")
+            failed.append(symbol)
+
+    print(f"\nDone. Processed {len(symbols) - len(failed)}/{len(symbols)} symbols.")
+    if failed:
+        print(f"Failed: {failed}")
 
 
 if __name__ == "__main__":
