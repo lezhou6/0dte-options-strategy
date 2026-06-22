@@ -16,8 +16,6 @@ test_days and stride_days are always 1.
 from __future__ import annotations
 
 import argparse
-import base64
-import io
 import logging
 import os
 import random
@@ -27,12 +25,10 @@ from datetime import datetime
 from typing import Sequence
 
 import lightgbm as lgb
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from scipy.stats import norm as _norm
 
 # LightGBM is fed numpy arrays; silence sklearn's benign feature-name mismatch warning.
@@ -368,10 +364,15 @@ def run_bs_model(cfg: Config, df: pd.DataFrame, folds_test_days: Sequence) -> di
 
 
 # ── report ──────────────────────────────────────────────────────────────────────────────
-def _fan_png(model_preds: pd.DataFrame, bs_close: pd.DataFrame, cfg: Config) -> str:
-    """Two-panel fan chart (model vs Black-Scholes) of predicted close vs true close.
+_OUTER_FILL = "rgba(70,130,180,0.18)"   # steelblue, outer (q10–q90) band
+_INNER_FILL = "rgba(70,130,180,0.34)"   # steelblue, inner (q25–q75) band
 
-    One snapshot per test day (nearest noon). Returns a base64-encoded PNG for HTML embed.
+
+def _fan_plotly(model_preds: pd.DataFrame, bs_close: pd.DataFrame, cfg: Config) -> str:
+    """Two-panel interactive fan chart (model vs Black-Scholes) of predicted vs true close.
+
+    A slider selects which intraday snapshot time to visualize across all test days
+    (defaulting to the snapshot nearest noon). Returns an HTML div for embedding.
     """
     q = list(cfg.quantiles)
     qpct = [int(round(ql * 100)) for ql in q]
@@ -385,45 +386,81 @@ def _fan_png(model_preds: pd.DataFrame, bs_close: pd.DataFrame, cfg: Config) -> 
             columns={f"q{p}_close": f"bs_q{p}_close" for p in qpct}),
         on=[cfg.group_col, "timestamp"], how="left",
     )
+    merged["_time"] = pd.to_datetime(merged["timestamp"]).dt.strftime("%H:%M")
+    times = sorted(merged["_time"].unique())
+    noon_key = min(times, key=lambda t: abs(int(t[:2]) * 60 + int(t[3:]) - 12 * 60))
 
-    ts = pd.to_datetime(merged["timestamp"])
-    merged = merged.assign(_dist=(ts.dt.hour * 60 + ts.dt.minute - 12 * 60).abs().to_numpy())
-    daily = (merged.sort_values([cfg.group_col, "_dist"])
-                   .groupby(cfg.group_col, as_index=False)
-                   .head(1)
-                   .sort_values(cfg.group_col))
-    x = pd.to_datetime(daily[cfg.group_col])
+    def slice_for(t: str) -> pd.DataFrame:
+        return (merged[merged["_time"] == t]
+                .drop_duplicates(subset=[cfg.group_col])
+                .sort_values(cfg.group_col))
 
-    def fan(ax, prefix, title):
-        ax.fill_between(x, daily[f"{prefix}{qpct[0]}_close"], daily[f"{prefix}{qpct[-1]}_close"],
-                        color="steelblue", alpha=0.20, label=f"q{q[0]}–q{q[-1]}")
+    # (subplot row, column name, role, legend name, show in legend) — fixed trace order.
+    specs: list[tuple[int, str, str, str | None, bool]] = []
+    for row, prefix in ((1, "q"), (2, "bs_q")):
+        legend = row == 1
+        specs.append((row, f"{prefix}{qpct[0]}_close", "band_lo", None, False))
+        specs.append((row, f"{prefix}{qpct[-1]}_close", "band_outer", f"q{q[0]}–q{q[-1]}", legend))
         if nq >= 4:
-            ax.fill_between(x, daily[f"{prefix}{qpct[1]}_close"], daily[f"{prefix}{qpct[-2]}_close"],
-                            color="steelblue", alpha=0.35, label=f"q{q[1]}–q{q[-2]}")
-        ax.plot(x, daily[f"{prefix}{qpct[mid]}_close"], color="steelblue", linestyle="--",
-                linewidth=1, label=f"predicted median (q{q[mid]})")
-        ax.plot(x, daily["true_close"], color="black", marker="o", markersize=3,
-                linewidth=1, label="true close")
-        ax.set_ylabel("Closing price ($)")
-        ax.set_title(title)
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+            specs.append((row, f"{prefix}{qpct[1]}_close", "band_lo", None, False))
+            specs.append((row, f"{prefix}{qpct[-2]}_close", "band_inner", f"q{q[1]}–q{q[-2]}", legend))
+        specs.append((row, f"{prefix}{qpct[mid]}_close", "median", f"predicted median (q{q[mid]})", legend))
+        specs.append((row, "true_close", "true", "true close", legend))
 
-    fig, axes = plt.subplots(2, 1, figsize=(13, 10), sharex=True)
-    fan(axes[0], "q",
-        f"{cfg.symbol} Model 2 (LightGBM quantile) — predicted close at noon vs true close "
-        f"[{len(daily)} test days]")
-    fan(axes[1], "bs_q",
-        f"{cfg.symbol} Black-Scholes analytic model — predicted close at noon vs true close "
-        f"[{len(daily)} test days]")
-    axes[-1].set_xlabel("Date")
-    fig.autofmt_xdate()
-    fig.tight_layout()
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.09,
+        subplot_titles=[
+            f"{cfg.symbol} Model 2 (LightGBM quantile) — predicted close vs true close",
+            f"{cfg.symbol} Black-Scholes analytic model — predicted close vs true close",
+        ],
+    )
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=130)
-    plt.close(fig)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+    d0 = slice_for(noon_key)
+    x0 = pd.to_datetime(d0[cfg.group_col]).dt.strftime("%Y-%m-%d").tolist()
+    for row, col, role, name, legend in specs:
+        y = d0[col].tolist()
+        if role == "band_lo":
+            tr = go.Scatter(x=x0, y=y, mode="lines", line=dict(width=0),
+                            hoverinfo="skip", showlegend=False)
+        elif role in ("band_outer", "band_inner"):
+            tr = go.Scatter(x=x0, y=y, mode="lines", line=dict(width=0), fill="tonexty",
+                            fillcolor=_OUTER_FILL if role == "band_outer" else _INNER_FILL,
+                            name=name, legendgroup=name, showlegend=legend, hoverinfo="skip")
+        elif role == "median":
+            tr = go.Scatter(x=x0, y=y, mode="lines", legendgroup="median",
+                            line=dict(color="#7FB3D5", width=1.4, dash="dash"),
+                            name=name, showlegend=legend)
+        else:  # true close
+            tr = go.Scatter(x=x0, y=y, mode="lines+markers", legendgroup="true",
+                            line=dict(color="white", width=1.4), marker=dict(size=4, color="white"),
+                            name=name, showlegend=legend)
+        fig.add_trace(tr, row=row, col=1)
+
+    # Slider: one step per snapshot time, restyling x/y of every trace together.
+    steps = []
+    for t in times:
+        d = slice_for(t)
+        xt = pd.to_datetime(d[cfg.group_col]).dt.strftime("%Y-%m-%d").tolist()
+        steps.append(dict(
+            method="restyle", label=t,
+            args=[{"x": [xt] * len(specs), "y": [d[col].tolist() for _, col, *_ in specs]}],
+        ))
+
+    fig.update_xaxes(title_text="Date", row=2, col=1)
+    fig.update_yaxes(title_text="Closing price ($)")
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#131722", plot_bgcolor="#131722",
+        height=780, margin=dict(t=70, b=110),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0),
+        sliders=[dict(
+            active=times.index(noon_key),
+            currentvalue=dict(prefix="Snapshot time: ", font=dict(color="#d1d4dc")),
+            pad=dict(t=50), steps=steps,
+            bgcolor="#2a2e39", bordercolor="#555", font=dict(color="#d1d4dc"),
+        )],
+    )
+    return fig.to_html(full_html=False, include_plotlyjs=False)
 
 
 def _comparison_table_html(model_res: dict, bs_res: dict, cfg: Config) -> str:
@@ -447,7 +484,7 @@ def _comparison_table_html(model_res: dict, bs_res: dict, cfg: Config) -> str:
 def generate_report(cfg: Config, model_res: dict, bs_res: dict,
                     start: str, end: str, log_path: str) -> str:
     """Write the HTML model-vs-Black-Scholes comparison report with the fan-chart viz."""
-    img_b64 = _fan_png(model_res["predictions"], bs_res["bs_close"], cfg)
+    chart_html = _fan_plotly(model_res["predictions"], bs_res["bs_close"], cfg)
 
     m_norm = model_res["mean_pinball_norm"]
     b_norm = bs_res["mean_pinball_norm"]
@@ -462,6 +499,7 @@ def generate_report(cfg: Config, model_res: dict, bs_res: dict,
 <head>
 <meta charset="utf-8">
 <title>{cfg.symbol} — Model 2 vs Black-Scholes</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <style>
   body {{ background:#131722; color:#d1d4dc;
          font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -477,7 +515,6 @@ def generate_report(cfg: Config, model_res: dict, bs_res: dict,
   th,td {{ padding:6px 14px; text-align:right; border-bottom:1px solid #2a2e39; }}
   th {{ color:#9598a1; font-weight:600; }}
   td.win {{ color:#00CC96; text-align:center; }}
-  img {{ max-width:100%; border-radius:6px; margin-top:8px; }}
   .section {{ margin-bottom:40px; }}
 </style>
 </head>
@@ -512,7 +549,9 @@ def generate_report(cfg: Config, model_res: dict, bs_res: dict,
 
 <div class="section">
 <h2>Predicted close vs true close</h2>
-<img src="data:image/png;base64,{img_b64}" alt="fan chart">
+<div class="meta">Use the slider below the chart to choose which intraday snapshot time to
+  visualize across all test days.</div>
+{chart_html}
 </div>
 </body>
 </html>"""
