@@ -108,6 +108,8 @@ Histogram features may be added in a later version.
 
 # Output formulation
 
+This project uses a normalized log return as the model's output:  
+Log return norm = ln(closing price / current price) / (atm iv * sqrt(ttm in years))   
 
 # Model 1: Black-Scholes Analytic Model
 
