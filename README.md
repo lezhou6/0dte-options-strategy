@@ -104,13 +104,27 @@ The dataset is mainly constructed from aggregate, and some data from processed a
 
 The dataset keeps expiration date for later use to avoid leakage. Metadata (expiration and underlying_price) is kept for later reconstruction, so features columns need to be explicitly specified during training.  
 
-TODO: add histogram features in a later version.  
+Histogram features may be added in a later version. 
 
 # Output formulation
-May start with quantile regression: 10th (10% chance price end up below here), 25th, 50th, 75th, 90th for the reason of no assumption required, thus skews, fat tails or other unexpected behavior can be naturally captured. Training loss is pinball loss.  
-Then later, more mathematical distributions can be chosen based on the result of quantile regression. Some candidates: Student-t, Mixture of Gaussians, Skew-normal... May use maximum log-likelihood in training.  
 
-# Potential application layer (low priority)
+
+# Model 1: Black-Scholes Analytic Model
+
+Run this model with symbol, start-date and end-date:  
+`python src/model/model1.py --symbol SPY --start-date 2026-03-31 --end-date 2026-06-01`  
+This prints the pinball loss on console, saves predictions to `data/predictions`, and saves a visualization to `data/visualization/model1`.  
+
+
+# Model 2: Quantile Regression Model
+
+Run this model:  
+`python src/model/model2.py`  
+The following arguments can be set, and here are the default arguments:  
+`python src/model/model2.py --symbol SPY, --start-date 2026-03-31, --end-date 2026-06-01 --window-mode rolling, --train-window-days 30, --val-days 1`  
+
+
+# Potential application layer
 With a distribution of closing price given by the model, an additional application layer may be designed in this project to help decision making. Some examples: 
 - User thinking about buying a call: probability of the underlying closing price stays above some price. 
 - User thinking about selling a strangle: probability of underlying closing price stays in some range. 
