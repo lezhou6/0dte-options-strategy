@@ -123,7 +123,8 @@ This prints the pinball loss on console, saves predictions to `data/predictions`
 Run this model:  
 `python src/model/model2.py`  
 The following arguments can be set, and here are the default arguments:  
-`python src/model/model2.py --symbol SPY, --start-date 2026-03-31, --end-date 2026-06-01 --window-mode rolling, --train-window-days 30, --val-days 1`  
+`python src/model/model2.py --symbol SPY --start-date 2026-03-31 --end-date 2026-06-01 --window-mode rolling --train-window-days 30 --val-days 1`  
+This saves prediction to `data/predictions`, and saves a comparison report to `data/model_report`.  
 
 
 # Potential application layer
